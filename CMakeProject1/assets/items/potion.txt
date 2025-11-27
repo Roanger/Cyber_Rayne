@@ -1,0 +1,8 @@
+Item Sprite Placeholder
+
+This is a placeholder for the health potion item sprite.
+In a real implementation, this would be a pixel art image file.
+
+Item: Health Potion
+Size: 16x16 pixels
+Format: PNG

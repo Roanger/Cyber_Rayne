@@ -1,0 +1,8 @@
+Spell Sprite Placeholder
+
+This is a placeholder for the fireball spell sprite.
+In a real implementation, this would be a pixel art image file.
+
+Spell: Fireball
+Size: 32x32 pixels
+Format: PNG

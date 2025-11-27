@@ -1,0 +1,8 @@
+Character Sprite Placeholder
+
+This is a placeholder for the player character sprite.
+In a real implementation, this would be a pixel art image file.
+
+Character: Hero (Mage/Warrior/Rogue)
+Size: 32x32 pixels
+Format: PNG

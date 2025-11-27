@@ -1,0 +1,8 @@
+Enemy Sprite Placeholder
+
+This is a placeholder for the goblin enemy sprite.
+In a real implementation, this would be a pixel art image file.
+
+Enemy: Goblin
+Size: 32x32 pixels
+Format: PNG
