@@ -26,7 +26,7 @@ const std::vector<const char*> deviceExtensions = {
 #ifdef NDEBUG
 const bool enableValidationLayers = false;
 #else
-const bool enableValidationLayers = false;
+const bool enableValidationLayers = true;
 #endif
 
 const int m_maxFramesInFlight = 2;
@@ -90,7 +90,7 @@ void VulkanRenderer::renderSpritePixelsWithTexture(int leftPx, int topPx, int wi
     float centerXpx = static_cast<float>(leftPx) + static_cast<float>(widthPx) * 0.5f;
     float centerYpx = static_cast<float>(topPx)  + static_cast<float>(heightPx) * 0.5f;
     float ndcX = -1.0f + 2.0f * (centerXpx / static_cast<float>(m_swapChainExtent.width));
-    float ndcY =  1.0f - 2.0f * (centerYpx / static_cast<float>(m_swapChainExtent.height));
+    float ndcY = -1.0f + 2.0f * (centerYpx / static_cast<float>(m_swapChainExtent.height));
 
     renderSpriteWithTexture(ndcX, ndcY, ndcWidth, ndcHeight, textureIndex);
 }
@@ -263,6 +263,9 @@ bool VulkanRenderer::initialize(uint32_t width, uint32_t height, const std::stri
 
         // Create texture sampler and load an initial texture before descriptor writes
         createTextureSampler();
+
+        // Create a default fallback texture (1x1 white)
+        createDefaultTexture();
 
         // Find the assets directory
         std::string assetsDir = findAssetsDirectory();
@@ -484,8 +487,9 @@ bool VulkanRenderer::drawFrame() {
     submitInfo.signalSemaphoreCount = 1;
     submitInfo.pSignalSemaphores = signalSemaphores;
 
-    if (vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]) != VK_SUCCESS) {
-        std::cerr << "Failed to submit draw command buffer!" << std::endl;
+    VkResult submitResult = vkQueueSubmit(m_graphicsQueue, 1, &submitInfo, m_inFlightFences[m_currentFrame]);
+    if (submitResult != VK_SUCCESS) {
+        std::cerr << "Failed to submit draw command buffer! Error code: " << submitResult << std::endl;
         return false;
     }
 
@@ -919,7 +923,7 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = m_swapChainExtent;
 
-    VkClearValue clearColor = {{{0.0f, 0.0f, 1.0f, 1.0f}}};
+    VkClearValue clearColor = {{{1.0f, 0.0f, 0.0f, 1.0f}}};
     // Reduced logging - only log once per session
     static bool loggedClearColor = false;
     if (!loggedClearColor) {
@@ -962,53 +966,37 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
         std::cout << "[DEBUG] Processing " << m_spritesToRender << " sprites in command buffer" << std::endl;
     }
 
-    // Draw indexed - one draw call for each sprite
+    // DEBUG: Log swapchain extent
+    static bool loggedExtent = false;
+    if (!loggedExtent) {
+        std::cout << "[DEBUG] SwapChain Extent: " << m_swapChainExtent.width << "x" << m_swapChainExtent.height << std::endl;
+        loggedExtent = true;
+    }
+
+    // Draw indexed - one draw call for each sprite using push constants
+    int lastTextureIndex = -1;
     for (int i = 0; i < m_spritesToRender; i++) {
-        // Get the sprite transform and texture index
         SpriteTransform& transform = m_spriteTransforms[i];
-        int textureIndex = transform.textureIndex;
-
-        // Validate texture index (silent validation)
-        if (textureIndex < 0 || textureIndex >= static_cast<int>(m_textures.size())) {
-            textureIndex = 0; // Use default texture if index is invalid
-        }
-
-        // Bind the appropriate descriptor set for this texture
-        if (textureIndex >= 0 && textureIndex < static_cast<int>(m_textureDescriptorSets.size())) {
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_textureDescriptorSets[textureIndex], 0, nullptr);
+        
+        // Bind the appropriate texture descriptor set if texture changed
+        int texIndex = transform.textureIndex;
+        if (texIndex >= 0 && texIndex < static_cast<int>(m_textureDescriptorSets.size())) {
+            if (texIndex != lastTextureIndex) {
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_textureDescriptorSets[texIndex], 0, nullptr);
+                lastTextureIndex = texIndex;
+            }
         } else {
-            // Fallback to default descriptor set
-            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[m_currentFrame], 0, nullptr);
+            // Fall back to default descriptor set
+            if (lastTextureIndex != 0) {
+                vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_pipelineLayout, 0, 1, &m_descriptorSets[m_currentFrame], 0, nullptr);
+                lastTextureIndex = 0;
+            }
         }
-
-        // Update uniform buffer with this sprite's transform
-        UniformBufferObject ubo{};
-
-        // Create model matrix for the sprite
-        // Initialize as identity matrix
-        for (int j = 0; j < 16; j++) {
-            ubo.model[j] = (j % 5 == 0) ? 1.0f : 0.0f;
-        }
-
-        // Apply translation and scaling from stored transform
-        ubo.model[12] = transform.x;      // Translation X
-        ubo.model[13] = transform.y;      // Translation Y
-        ubo.model[0] = transform.width;   // Scale X
-        ubo.model[5] = transform.height;  // Scale Y
-
-        // For now we'll use identity view and projection matrices
-        for (int j = 0; j < 16; j++) {
-            ubo.view[j] = (j % 5 == 0) ? 1.0f : 0.0f;
-            ubo.proj[j] = (j % 5 == 0) ? 1.0f : 0.0f;
-        }
-
-        // Update the uniform buffer for the current sprite
-        void* data;
-        vkMapMemory(m_device, m_uniformBuffersMemory[m_currentFrame], 0, sizeof(ubo), 0, &data);
-        memcpy(data, &ubo, sizeof(ubo));
-        vkUnmapMemory(m_device, m_uniformBuffersMemory[m_currentFrame]);
-
-        // Draw this sprite
+        
+        // Push constants: x, y, width, height
+        float pushData[4] = { transform.x, transform.y, transform.width, transform.height };
+        vkCmdPushConstants(commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushData), pushData);
+        
         vkCmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
     }
 
@@ -1504,23 +1492,40 @@ void VulkanRenderer::createTextureDescriptorSets() {
         m_textureDescriptorSets[existingSets + i] = newSets[i];
     }
 
-    // Update each new texture descriptor set with its corresponding texture
+    // Update each new texture descriptor set with both UBO and texture bindings
     for (size_t i = existingSets; i < m_textures.size(); ++i) {
+        // Configure uniform buffer descriptor (same for all, using frame 0 as reference)
+        VkDescriptorBufferInfo bufferInfo{};
+        bufferInfo.buffer = m_uniformBuffers[0];
+        bufferInfo.offset = 0;
+        bufferInfo.range = sizeof(UniformBufferObject);
+        
         VkDescriptorImageInfo imageInfo{};
         imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         imageInfo.imageView = m_textures[i].view;
         imageInfo.sampler = m_textureSampler;
 
-        VkWriteDescriptorSet descriptorWrite{};
-        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.dstSet = m_textureDescriptorSets[i];
-        descriptorWrite.dstBinding = 1;
-        descriptorWrite.dstArrayElement = 0;
-        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrite.descriptorCount = 1;
-        descriptorWrite.pImageInfo = &imageInfo;
+        std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+        
+        // UBO binding
+        descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[0].dstSet = m_textureDescriptorSets[i];
+        descriptorWrites[0].dstBinding = 0;
+        descriptorWrites[0].dstArrayElement = 0;
+        descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptorWrites[0].descriptorCount = 1;
+        descriptorWrites[0].pBufferInfo = &bufferInfo;
+        
+        // Texture binding
+        descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrites[1].dstSet = m_textureDescriptorSets[i];
+        descriptorWrites[1].dstBinding = 1;
+        descriptorWrites[1].dstArrayElement = 0;
+        descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrites[1].descriptorCount = 1;
+        descriptorWrites[1].pImageInfo = &imageInfo;
 
-        vkUpdateDescriptorSets(m_device, 1, &descriptorWrite, 0, nullptr);
+        vkUpdateDescriptorSets(m_device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
     }
 
     std::cout << "Created " << newTextures << " new texture descriptor sets (total: " << m_textures.size() << ")." << std::endl;
@@ -1781,7 +1786,7 @@ bool VulkanRenderer::createGraphicsPipeline() {
     rasterizer.rasterizerDiscardEnable = VK_FALSE;
     rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
     rasterizer.lineWidth = 1.0f;
-    rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+    rasterizer.cullMode = VK_CULL_MODE_NONE;
     rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
     rasterizer.depthBiasEnable = VK_FALSE;
 
@@ -1824,10 +1829,19 @@ bool VulkanRenderer::createGraphicsPipeline() {
 
     // Pipeline layout
     std::cout << "Creating pipeline layout..." << std::endl;
+    
+    // Push constant range for per-sprite transform (x, y, width, height)
+    VkPushConstantRange pushConstantRange{};
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushConstantRange.offset = 0;
+    pushConstantRange.size = sizeof(float) * 4; // x, y, width, height
+    
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipelineLayoutInfo.setLayoutCount = 1;
     pipelineLayoutInfo.pSetLayouts = &m_descriptorSetLayout;
+    pipelineLayoutInfo.pushConstantRangeCount = 1;
+    pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
     if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, nullptr, &m_pipelineLayout) != VK_SUCCESS) {
         throw std::runtime_error("failed to create pipeline layout!");
@@ -2165,4 +2179,59 @@ bool VulkanRenderer::createTextureImage(const std::string& path) {
     createTextureDescriptorSets();
     
     return true;
+}
+
+void VulkanRenderer::createDefaultTexture() {
+    std::cout << "Creating default white texture..." << std::endl;
+    
+    // 1x1 white pixel
+    uint32_t texWidth = 1;
+    uint32_t texHeight = 1;
+    VkDeviceSize imageSize = texWidth * texHeight * 4;
+    unsigned char pixels[] = { 255, 255, 255, 255 };
+    
+    // Create a staging buffer for the pixel data
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+    
+    // Copy pixel data to the staging buffer
+    void* data;
+    vkMapMemory(m_device, stagingBufferMemory, 0, imageSize, 0, &data);
+    memcpy(data, pixels, static_cast<size_t>(imageSize));
+    vkUnmapMemory(m_device, stagingBufferMemory);
+    
+    // Create a new texture entry
+    Texture newTexture{};
+    newTexture.width = texWidth;
+    newTexture.height = texHeight;
+    
+    // Create a Vulkan image for the texture
+    createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, 
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, newTexture.image, newTexture.memory);
+    
+    // Transition image layout to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    transitionImageLayout(newTexture.image, VK_FORMAT_R8G8B8A8_SRGB, 
+                         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    
+    // Copy pixel data from staging buffer to texture image
+    copyBufferToImage(stagingBuffer, newTexture.image, 
+                     static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+    
+    // Transition image layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    transitionImageLayout(newTexture.image, VK_FORMAT_R8G8B8A8_SRGB, 
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    
+    // Create image view for the texture
+    newTexture.view = createImageView(newTexture.image, VK_FORMAT_R8G8B8A8_SRGB);
+    
+    // Free staging buffer
+    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+    vkFreeMemory(m_device, stagingBufferMemory, nullptr);
+    
+    // Add the texture to our collection
+    m_textures.push_back(newTexture);
+    
+    std::cout << "Default white texture created at index " << (m_textures.size() - 1) << std::endl;
 }

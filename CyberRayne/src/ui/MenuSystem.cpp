@@ -4,7 +4,7 @@
 #include <filesystem>
 
 MenuSystem::MenuSystem() : m_selectedOption(MenuItem::START_GAME), m_optionSelected(false), m_highlightedIndex(0),
-    m_backgroundTextureIndex(-1), m_startButtonTextureIndex(-1), m_loadButtonTextureIndex(-1), m_settingsButtonTextureIndex(-1), 
+    m_backgroundTextureIndex(-1), m_nameBannerTextureIndex(-1), m_startButtonTextureIndex(-1), m_loadButtonTextureIndex(-1), m_settingsButtonTextureIndex(-1), 
     m_quitButtonTextureIndex(-1), m_cursorTextureIndex(-1), m_highlightTextureIndex(-1) {
     m_menuOptions = {
         "Start Game",
@@ -37,13 +37,23 @@ void MenuSystem::loadTextures(VulkanRenderer* renderer) {
     m_backgroundTextureIndex = renderer->loadTexture(bgPath);
     std::cout << "Background texture index: " << m_backgroundTextureIndex << std::endl;
 
-    // Start button: prefer nested, else simple
-    const std::string startNested = base + "/ui/start/Start_Button_Pixel_Ar_0810100014_texture_obj/Start_Button_Pixel_Ar_0810100014_texture.png";
+    // Name Banner (CYBER RAYNE logo)
+    const std::string bannerPath = base + "/ui/namebanner.png";
+    if (exists(bannerPath)) {
+        m_nameBannerTextureIndex = renderer->loadTexture(bannerPath);
+        std::cout << "Name banner texture index: " << m_nameBannerTextureIndex << std::endl;
+    } else {
+        std::cerr << "Name banner texture missing at: " << bannerPath << std::endl;
+        m_nameBannerTextureIndex = -1;
+    }
+
+    // Start button: prefer simple start.png, else nested (from 3D model export)
     const std::string startSimple = base + "/ui/start.png";
-    const std::string startPath = exists(startNested) ? startNested : startSimple;
+    const std::string startNested = base + "/ui/start/Start_Button_Pixel_Ar_0810100014_texture_obj/Start_Button_Pixel_Ar_0810100014_texture.png";
+    const std::string startPath = exists(startSimple) ? startSimple : startNested;
     std::cout << "Looking for start button texture..." << std::endl;
-    std::cout << "  Nested path: " << startNested << " (exists: " << (exists(startNested) ? "yes" : "no") << ")" << std::endl;
     std::cout << "  Simple path: " << startSimple << " (exists: " << (exists(startSimple) ? "yes" : "no") << ")" << std::endl;
+    std::cout << "  Nested path: " << startNested << " (exists: " << (exists(startNested) ? "yes" : "no") << ")" << std::endl;
     std::cout << "  Using path: " << startPath << std::endl;
     if (!exists(startPath)) {
         std::cerr << "Start button texture missing at: " << startPath << std::endl;
@@ -116,35 +126,43 @@ void MenuSystem::renderMenuBackground(VulkanRenderer* renderer) {
 void MenuSystem::renderMenuOptions(VulkanRenderer* renderer) {
     std::cout << "Rendering menu options..." << std::endl;
 
-    // Pixel-based layout: three top buttons (Start, Load, Quit) and Settings below between Start/Load
     const int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
     const int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
 
     std::cout << "Menu rendering - Screen size: " << screenW << "x" << screenH << std::endl;
 
-    // Top row button sizes (approx). Tune to your assets.
-    const int topW = 300;
-    const int topH = 110;
-    const int gapX = 30;
-    const int rowY = screenH / 3; // one third from top
+    // ========== NAME BANNER (top-left) ==========
+    if (m_nameBannerTextureIndex >= 0) {
+        const int bannerW = 450;  // Bigger banner
+        const int bannerH = 230;  // Bigger banner
+        const int bannerX = 50;   // Left margin
+        const int bannerY = 50;   // Top margin
+        renderer->renderSpritePixelsWithTexture(bannerX, bannerY, bannerW, bannerH, m_nameBannerTextureIndex);
+    }
 
-    // Compute total width of three buttons + two gaps, center horizontally
-    const int totalW = topW * 3 + gapX * 2;
+    // ========== MAIN BUTTONS (bottom center: START, LOAD, QUIT in a row) ==========
+    const int buttonW = 200;
+    const int buttonH = 80;
+    const int gapX = 40;
+    
+    // Position buttons in bottom third of screen
+    const int rowY = screenH - 250;  // Distance from bottom
+    
+    // Center the three buttons horizontally
+    const int totalW = buttonW * 3 + gapX * 2;
     const int leftX = (screenW - totalW) / 2;
 
-    // Settings button size (square-ish)
-    const int setW = 140;
-    const int setH = 140;
-    const int gapY = 26;
-    // Place settings centered under the first two buttons
-    const int settingsX = leftX + topW + gapX/2 - setW/2; // midway between Start and Load
-    const int settingsY = rowY + topH + gapY;
+    // ========== SETTINGS BUTTON (below the main buttons, centered) ==========
+    const int settingsW = 200;
+    const int settingsH = 70;
+    const int settingsX = (screenW - settingsW) / 2;
+    const int settingsY = rowY + buttonH + 30;
 
     std::cout << "Menu button positions:" << std::endl;
-    std::cout << "  Start: (" << leftX << ", " << rowY << ") size (" << topW << ", " << topH << ")" << std::endl;
-    std::cout << "  Load: (" << (leftX + topW + gapX) << ", " << rowY << ") size (" << topW << ", " << topH << ")" << std::endl;
-    std::cout << "  Quit: (" << (leftX + 2*(topW + gapX)) << ", " << rowY << ") size (" << topW << ", " << topH << ")" << std::endl;
-    std::cout << "  Settings: (" << settingsX << ", " << settingsY << ") size (" << setW << ", " << setH << ")" << std::endl;
+    std::cout << "  Start: (" << leftX << ", " << rowY << ") size (" << buttonW << ", " << buttonH << ")" << std::endl;
+    std::cout << "  Load: (" << (leftX + buttonW + gapX) << ", " << rowY << ") size (" << buttonW << ", " << buttonH << ")" << std::endl;
+    std::cout << "  Quit: (" << (leftX + 2*(buttonW + gapX)) << ", " << rowY << ") size (" << buttonW << ", " << buttonH << ")" << std::endl;
+    std::cout << "  Settings: (" << settingsX << ", " << settingsY << ") size (" << settingsW << ", " << settingsH << ")" << std::endl;
 
     // Helper to draw a highlight backdrop using NDC conversion
     auto drawHighlight = [&](int x, int y, int w, int h) {
@@ -153,7 +171,7 @@ void MenuSystem::renderMenuOptions(VulkanRenderer* renderer) {
         float cx = static_cast<float>(x) + w * 0.5f;
         float cy = static_cast<float>(y) + h * 0.5f;
         float ndcX = -1.0f + 2.0f * (cx / static_cast<float>(screenW));
-        float ndcY =  1.0f - 2.0f * (cy / static_cast<float>(screenH));
+        float ndcY = -1.0f + 2.0f * (cy / static_cast<float>(screenH));
         renderer->renderSprite(ndcX, ndcY, ndcW * 1.08f, ndcH * 1.15f); // slightly larger backdrop
     };
 
@@ -164,7 +182,7 @@ void MenuSystem::renderMenuOptions(VulkanRenderer* renderer) {
         float cx = static_cast<float>(x) + w * 0.5f;
         float cy = static_cast<float>(y) + h * 0.5f;
         float ndcX = -1.0f + 2.0f * (cx / static_cast<float>(screenW));
-        float ndcY =  1.0f - 2.0f * (cy / static_cast<float>(screenH));
+        float ndcY = -1.0f + 2.0f * (cy / static_cast<float>(screenH));
         // Outer (darker)
         renderer->renderSprite(ndcX, ndcY, ndcW, ndcH);
         // Inner (slightly smaller) to simulate border
@@ -173,10 +191,10 @@ void MenuSystem::renderMenuOptions(VulkanRenderer* renderer) {
 
     // Define positions for each item by index
     struct Rect { int x,y,w,h,tex; } rects[4] = {
-        { leftX + 0*(topW+gapX), rowY, topW, topH, m_startButtonTextureIndex },
-        { leftX + 1*(topW+gapX), rowY, topW, topH, m_loadButtonTextureIndex },
-        { leftX + 2*(topW+gapX), rowY, topW, topH, m_quitButtonTextureIndex },
-        { settingsX, settingsY, setW, setH, m_settingsButtonTextureIndex }
+        { leftX + 0*(buttonW+gapX), rowY, buttonW, buttonH, m_startButtonTextureIndex },
+        { leftX + 1*(buttonW+gapX), rowY, buttonW, buttonH, m_loadButtonTextureIndex },
+        { leftX + 2*(buttonW+gapX), rowY, buttonW, buttonH, m_quitButtonTextureIndex },
+        { settingsX, settingsY, settingsW, settingsH, m_settingsButtonTextureIndex }
     };
 
 

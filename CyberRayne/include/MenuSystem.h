@@ -39,6 +39,7 @@ private:
     
     // Texture indices for menu button images
     int m_backgroundTextureIndex;
+    int m_nameBannerTextureIndex;
     int m_startButtonTextureIndex;
     int m_loadButtonTextureIndex;
     int m_settingsButtonTextureIndex;

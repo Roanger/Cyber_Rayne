@@ -18,7 +18,7 @@ bool Game::initialize() {
     // Initialize Vulkan renderer
     m_renderer = std::make_unique<VulkanRenderer>();
     std::cout << "Vulkan renderer created." << std::endl;
-    if (!m_renderer->initialize(800, 600, "FF9 Style JRPG")) {
+    if (!m_renderer->initialize(1920, 1080, "Cyber Rayne")) {
         std::cerr << "Failed to initialize Vulkan renderer!" << std::endl;
         return false;
     }

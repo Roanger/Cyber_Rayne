@@ -88,6 +88,7 @@ public:
     void renderSprite(float x, float y, float width, float height);
     
     // New methods for texture management
+    void createDefaultTexture();
     int loadTexture(const std::string& path);
     void setCurrentTexture(int textureIndex);
     void renderSpriteWithTexture(float x, float y, float width, float height, int textureIndex);
@@ -164,7 +165,7 @@ private:
   // Remember where assets were found so others can reference
   std::string m_assetsBasePath;
     int m_spritesToRender;
-    static const int MAX_SPRITES = 100; // Maximum number of sprites per frame
+    static const int MAX_SPRITES = 1000; // Maximum number of sprites per frame
     std::vector<SpriteTransform> m_spriteTransforms; // Store transform data for each sprite
 
     // Private methods

@@ -1,10 +1,10 @@
-# Cyber Rayne
+# FF9-style JRPG
 
-A cyberpunk-themed turn-based JRPG built with C++ and Vulkan.
+A turn-based JRPG inspired by Final Fantasy 9, built with C++ and Vulkan.
 
 ## Features
 - Turn-based battle system
-- Cyberpunk pixel-art graphics style
+- Pixel-art graphics style (similar to Stardew Valley)
 - Three playable characters (Mage, Warrior, Rogue)
 - Multiple maps and biomes
 - Character-specific starter stories
@@ -25,10 +25,10 @@ cd build
 cmake ..
 
 # Build the project
-cmake --build . --config Debug
+cmake --build .
 
 # Run the game
-./Debug/CyberRayne.exe
+./FF9StyleJRPG
 ```
 
 ## Project Structure
@@ -36,8 +36,8 @@ cmake --build . --config Debug
   - `core/` - Core game systems (Game, GameState, Player, World, Map, etc.)
   - `graphics/` - Vulkan rendering system
   - `entities/` - Game entities (Enemy, NPC, etc.)
-  - `systems/` - Game systems (BattleSystem, CharacterSelection, etc.)
-  - `ui/` - User interface (MenuSystem)
+  - `systems/` - Game systems (BattleSystem, etc.)
 - `assets/` - Game assets (graphics, audio, etc.)
 - `include/` - Header files
+- `libs/` - Third-party libraries
 - `shaders/` - Vulkan shader files

@@ -37,6 +37,12 @@ void GameState::setRenderer(VulkanRenderer* renderer) {
         }
     }
     
+    // Load character selection textures
+    if (m_charSelectionSystem && m_renderer) {
+        std::cout << "Loading character selection textures" << std::endl;
+        m_charSelectionSystem->loadTextures(m_renderer);
+    }
+    
     // Initialize UIManager with renderer if available
     if (m_uiManager && m_renderer) {
         std::cout << "Initializing UIManager with renderer" << std::endl;
@@ -64,6 +70,11 @@ bool GameState::initialize() {
     if (!m_charSelectionSystem->initialize()) {
         std::cerr << "Failed to initialize character selection system!" << std::endl;
         return false;
+    }
+    // If renderer was set before initialize(), load character selection textures now
+    if (m_renderer && m_charSelectionSystem) {
+        std::cout << "Loading character selection textures (post-initialize)" << std::endl;
+        m_charSelectionSystem->loadTextures(m_renderer);
     }
 
     // Initialize UI Manager
@@ -110,26 +121,27 @@ void GameState::update(float deltaTime) {
         case State::CHARACTER_SELECTION:
             // Handle character selection logic
             std::cout << "In character selection state" << std::endl;
-            // For now, we'll just simulate character selection
-            // In a real implementation, we would handle input to select a character
-            if (m_charSelectionSystem && !m_charSelectionSystem->isCharacterSelected()) {
-                // Select the first character by default for now
-                m_charSelectionSystem->selectCharacter(0);
+            // Wait for player to select a character using handleInput
+            if (m_charSelectionSystem) {
+                m_charSelectionSystem->update(deltaTime);
                 
-                // Create the player with the selected character
-                m_player = m_charSelectionSystem->createSelectedCharacter();
-                if (m_player) {
-                    m_player->initialize();
-                    
-                    // Initialize world after character selection
-                    m_world = new World();
-                    if (m_world->initialize()) {
-                        m_world->setPlayer(m_player);
+                // Check if character was selected (via Enter key in handleInput)
+                if (m_charSelectionSystem->isCharacterSelected()) {
+                    // Create the player with the selected character
+                    m_player = m_charSelectionSystem->createSelectedCharacter();
+                    if (m_player) {
+                        m_player->initialize();
+                        
+                        // Initialize world after character selection
+                        m_world = new World();
+                        if (m_world->initialize()) {
+                            m_world->setPlayer(m_player);
+                        }
                     }
+                    
+                    // Move to world exploration state
+                    m_currentState = State::WORLD_EXPLORATION;
                 }
-                
-                // Move to world exploration state
-                m_currentState = State::WORLD_EXPLORATION;
             }
             break;
         case State::WORLD_EXPLORATION:
@@ -255,6 +267,8 @@ void GameState::render(VulkanRenderer* renderer) {
 void GameState::handleInput(int key) {
     if (m_currentState == State::MENU && m_menuSystem) {
         m_menuSystem->handleInput(key);
+    } else if (m_currentState == State::CHARACTER_SELECTION && m_charSelectionSystem) {
+        m_charSelectionSystem->handleInput(key);
     } else if (m_currentState == State::BATTLE && m_uiManager) {
         m_uiManager->handleInput(key);
     }
