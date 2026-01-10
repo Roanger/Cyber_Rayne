@@ -25,13 +25,15 @@ bool CharacterSelectionSystem::initialize() {
 void CharacterSelectionSystem::loadTextures(VulkanRenderer* renderer) {
     if (!renderer) return;
     
-    std::string base = "assets";
+    std::string base = renderer->getAssetsBasePath();
     
     // Load background (reuse menu background)
     std::string bgPath = base + "/ui/menu_background.png";
     if (std::filesystem::exists(bgPath)) {
         m_backgroundTextureIndex = renderer->loadTexture(bgPath);
         std::cout << "Loaded character selection background: " << m_backgroundTextureIndex << std::endl;
+    } else {
+        std::cerr << "Character selection background not found: " << bgPath << std::endl;
     }
     
     // Load cursor texture
@@ -39,6 +41,8 @@ void CharacterSelectionSystem::loadTextures(VulkanRenderer* renderer) {
     if (std::filesystem::exists(cursorPath)) {
         m_cursorTextureIndex = renderer->loadTexture(cursorPath);
         std::cout << "Loaded character selection cursor: " << m_cursorTextureIndex << std::endl;
+    } else {
+        std::cerr << "Character selection cursor not found: " << cursorPath << std::endl;
     }
     
     // Load character textures
@@ -55,7 +59,7 @@ void CharacterSelectionSystem::loadTextures(VulkanRenderer* renderer) {
                       << " (index: " << m_characterOptions[i].textureIndex << ")" << std::endl;
         } else {
             m_characterOptions[i].textureIndex = -1;
-            std::cout << "Character texture not found: " << charTextures[i] << std::endl;
+            std::cerr << "Character texture not found: " << charTextures[i] << std::endl;
         }
     }
 }

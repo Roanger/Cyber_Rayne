@@ -2,7 +2,11 @@
 #include "../../include/GameState.h"
 #include "../../include/VulkanRenderer.h"
 #include <iostream>
-#include <Windows.h>
+#ifdef _WIN32
+ #include <Windows.h>
+#else
+ #include <GLFW/glfw3.h>
+#endif
 #include <thread>
 #include <chrono>
 
@@ -68,6 +72,7 @@ void Game::run() {
         
         // Handle input
         if (m_gameState) {
+#ifdef _WIN32
             if (GetAsyncKeyState(VK_UP) & 0x8000) {
                 m_gameState->handleInput(0);
             }
@@ -84,6 +89,27 @@ void Game::run() {
             if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
                 m_gameState->handleInput(4);
             }
+#else
+            GLFWwindow* window = m_renderer ? m_renderer->getWindow() : nullptr;
+            if (window) {
+                if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
+                    m_gameState->handleInput(0);
+                }
+                if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
+                    m_gameState->handleInput(1);
+                }
+                if (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
+                    std::cout << "[DEBUG] Enter key pressed - handling input 2" << std::endl;
+                    m_gameState->handleInput(2);
+                }
+                if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
+                    m_gameState->handleInput(3);
+                }
+                if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
+                    m_gameState->handleInput(4);
+                }
+            }
+#endif
         }
 
         // Update game state

@@ -1,6 +1,9 @@
 #pragma once
 
-#define VK_USE_PLATFORM_WIN32_KHR
+#ifdef _WIN32
+ #define VK_USE_PLATFORM_WIN32_KHR
+#endif
+ 
 #include <vulkan/vulkan.h>
 #include <vector>
 #include <string>
@@ -39,7 +42,11 @@ struct Vertex {
     }
 };
 
-#include <windows.h>
+#ifdef _WIN32
+ #include <windows.h>
+#else
+ struct GLFWwindow;
+#endif
 #include <string>
 #include <set>
 #include <algorithm>
@@ -99,13 +106,21 @@ public:
     // Accessor for assets base directory detected at init
     const std::string& getAssetsBasePath() const { return m_assetsBasePath; }
 
+#ifndef _WIN32
+    GLFWwindow* getWindow() const { return m_window; }
+#endif
+
 private:
     const int MAX_FRAMES_IN_FLIGHT = 2;
     size_t m_currentFrame = 0;
 
     // Window variables
+#ifdef _WIN32
     HWND m_window;
     HINSTANCE m_hInstance;
+#else
+    GLFWwindow* m_window;
+#endif
     std::string m_windowTitle;
     uint32_t m_windowWidth;
     uint32_t m_windowHeight;
@@ -236,6 +251,8 @@ private:
         VkDebugUtilsMessengerEXT debugMessenger,
         const VkAllocationCallbacks* pAllocator);
 
+#ifdef _WIN32
     // Static window procedure
     static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
+#endif
 };

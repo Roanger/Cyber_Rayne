@@ -6,11 +6,12 @@
 #endif
 #include <algorithm>
 #include <iostream>
+#include <filesystem>
 
 Player::Player(CharacterClass charClass, const std::string& name)
     : m_characterClass(charClass), m_name(name), m_level(1), m_health(100), m_mana(50),
       m_maxHealth(100), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
-      m_x(0.0f), m_y(0.0f) {
+      m_x(0.0f), m_y(0.0f), m_textureIndex(-1) {
     initializeStats();
 }
 
@@ -18,7 +19,7 @@ Player::Player(CharacterClass charClass, const std::string& name)
 Player::Player() 
     : m_characterClass(CharacterClass::WARRIOR), m_name("DefaultPlayer"), m_level(1), 
       m_health(100), m_mana(50), m_maxHealth(100), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
-      m_x(0.0f), m_y(0.0f) {
+      m_x(0.0f), m_y(0.0f), m_textureIndex(-1) {
     // Initialize with default values
 }
 
@@ -37,9 +38,42 @@ void Player::update(float deltaTime) {
 }
 
 #ifndef NO_VULKAN
+void Player::loadTexture(VulkanRenderer* renderer) {
+    if (!renderer) return;
+    
+    std::string base = renderer->getAssetsBasePath();
+    std::string texturePath;
+    
+    // Load texture based on character class
+    switch (m_characterClass) {
+        case CharacterClass::MAGE:
+            texturePath = base + "/mage.png";
+            break;
+        case CharacterClass::WARRIOR:
+            texturePath = base + "/warrior.png";
+            break;
+        case CharacterClass::ROGUE:
+            texturePath = base + "/rogue.png";
+            break;
+    }
+    
+    if (std::filesystem::exists(texturePath)) {
+        m_textureIndex = renderer->loadTexture(texturePath);
+        std::cout << "Loaded player texture: " << texturePath << " (index: " << m_textureIndex << ")" << std::endl;
+    } else {
+        std::cerr << "Player texture not found: " << texturePath << std::endl;
+        m_textureIndex = -1;
+    }
+}
+
 void Player::render(VulkanRenderer* renderer) {
-    // Render a simple sprite for the player
-    renderer->renderSprite(m_x, m_y, 0.1f, 0.1f);
+    // Render player with texture if available
+    if (m_textureIndex >= 0) {
+        renderer->renderSpriteWithTexture(m_x, m_y, 0.1f, 0.1f, m_textureIndex);
+    } else {
+        // Fallback to white sprite if no texture
+        renderer->renderSprite(m_x, m_y, 0.1f, 0.1f);
+    }
 }
 #else
 void Player::render() {

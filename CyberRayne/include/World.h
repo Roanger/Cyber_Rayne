@@ -23,6 +23,7 @@ public:
     ~World();
 
     bool initialize();
+    void loadMapTextures(VulkanRenderer* renderer);
     void update(float deltaTime);
     void render(VulkanRenderer* renderer);
     void spawnEnemies();

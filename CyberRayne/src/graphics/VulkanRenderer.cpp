@@ -11,6 +11,10 @@
 #include <optional>
 #include <cstdint> // Necessary for UINT32_MAX
 #include <filesystem>
+#ifndef _WIN32
+ #define GLFW_INCLUDE_VULKAN
+ #include <GLFW/glfw3.h>
+#endif
 #include "../../include/VulkanRenderer.h"
 #include <limits>
 
@@ -36,8 +40,10 @@ std::string findAssetsDirectory() {
     // Check common asset directory locations
     std::vector<std::string> possiblePaths = {
         "assets",
+        "CyberRayne/assets",
         "CMakeProject1/assets",
         "../assets",
+        "../CyberRayne/assets",
         "../../assets",
         "../../../assets"
     };
@@ -58,6 +64,9 @@ std::string findAssetsDirectory() {
 std::string findShadersDirectory() {
     std::vector<std::string> possiblePaths = {
         "shaders",                // when CWD is build dir and shaders are copied there
+        "build/shaders",          // when CWD is repo root and shaders are copied next to executable
+        "../build/shaders",       // when CWD is CyberRayne/ (source dir)
+        "CyberRayne/shaders",     // when CWD is repo root and using source shaders
         "../shaders",             // CWD build/ -> project/shaders
         "CMakeProject1/shaders",  // CWD repo root
         "../CMakeProject1/shaders",
@@ -158,7 +167,9 @@ void VulkanRenderer::setupDebugMessenger() {
 
 VulkanRenderer::VulkanRenderer()
     : m_window(nullptr),
+#ifdef _WIN32
       m_hInstance(GetModuleHandle(nullptr)),
+#endif
       m_instance(VK_NULL_HANDLE),
       m_debugMessenger(VK_NULL_HANDLE),
       m_physicalDevice(VK_NULL_HANDLE),
@@ -275,7 +286,7 @@ bool VulkanRenderer::initialize(uint32_t width, uint32_t height, const std::stri
         std::string texturePath = assetsDir + "/mage.png";
         if (!createTextureImage(texturePath)) {
             std::cerr << "Failed to load mage texture from: " << texturePath << std::endl;
-            return false;
+            std::cerr << "Continuing with default texture." << std::endl;
         }
 
         // Now that we have uniform buffers and a texture, create pool and write descriptor sets
@@ -323,87 +334,151 @@ bool VulkanRenderer::initialize(uint32_t width, uint32_t height, const std::stri
 }
 
 void VulkanRenderer::cleanup() {
-    // Wait for device to finish before cleanup
-    vkDeviceWaitIdle(m_device);
+    if (m_device != VK_NULL_HANDLE) {
+        // Wait for device to finish before cleanup
+        vkDeviceWaitIdle(m_device);
+    }
 
     // Cleanup in reverse order of creation
     // Cleanup synchronization objects
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
-        vkDestroySemaphore(m_device, m_imageAvailableSemaphores[i], nullptr);
-        vkDestroyFence(m_device, m_inFlightFences[i], nullptr);
+    if (m_device != VK_NULL_HANDLE) {
+        const size_t frameCount = std::min<size_t>(MAX_FRAMES_IN_FLIGHT, std::min(m_renderFinishedSemaphores.size(), std::min(m_imageAvailableSemaphores.size(), m_inFlightFences.size())));
+        for (size_t i = 0; i < frameCount; i++) {
+            if (m_renderFinishedSemaphores[i] != VK_NULL_HANDLE) vkDestroySemaphore(m_device, m_renderFinishedSemaphores[i], nullptr);
+            if (m_imageAvailableSemaphores[i] != VK_NULL_HANDLE) vkDestroySemaphore(m_device, m_imageAvailableSemaphores[i], nullptr);
+            if (m_inFlightFences[i] != VK_NULL_HANDLE) vkDestroyFence(m_device, m_inFlightFences[i], nullptr);
+        }
+        m_renderFinishedSemaphores.clear();
+        m_imageAvailableSemaphores.clear();
+        m_inFlightFences.clear();
     }
     
     // Cleanup per-swapchain-image semaphores
-    for (size_t i = 0; i < m_swapChainImages.size(); i++) {
-        vkDestroySemaphore(m_device, m_renderFinishedSemaphoresPerImage[i], nullptr);
-        vkDestroySemaphore(m_device, m_imageAvailableSemaphoresPerImage[i], nullptr);
+    if (m_device != VK_NULL_HANDLE) {
+        const size_t perImageCount = std::min(m_swapChainImages.size(), std::min(m_renderFinishedSemaphoresPerImage.size(), m_imageAvailableSemaphoresPerImage.size()));
+        for (size_t i = 0; i < perImageCount; i++) {
+            if (m_renderFinishedSemaphoresPerImage[i] != VK_NULL_HANDLE) vkDestroySemaphore(m_device, m_renderFinishedSemaphoresPerImage[i], nullptr);
+            if (m_imageAvailableSemaphoresPerImage[i] != VK_NULL_HANDLE) vkDestroySemaphore(m_device, m_imageAvailableSemaphoresPerImage[i], nullptr);
+        }
+        m_renderFinishedSemaphoresPerImage.clear();
+        m_imageAvailableSemaphoresPerImage.clear();
     }
 
     // Cleanup command buffers
-    vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+    if (m_device != VK_NULL_HANDLE && m_commandPool != VK_NULL_HANDLE && !m_commandBuffers.empty()) {
+        vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(m_commandBuffers.size()), m_commandBuffers.data());
+        m_commandBuffers.clear();
+    }
 
     // Cleanup command pool
-    vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_commandPool != VK_NULL_HANDLE) {
+        vkDestroyCommandPool(m_device, m_commandPool, nullptr);
+        m_commandPool = VK_NULL_HANDLE;
+    }
 
     // Cleanup framebuffers
-    for (auto framebuffer : m_framebuffers) {
-        vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+    if (m_device != VK_NULL_HANDLE) {
+        for (auto framebuffer : m_framebuffers) {
+            if (framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+        }
     }
+    m_framebuffers.clear();
 
     // Cleanup render pass
-    vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_renderPass != VK_NULL_HANDLE) {
+        vkDestroyRenderPass(m_device, m_renderPass, nullptr);
+        m_renderPass = VK_NULL_HANDLE;
+    }
 
     // Cleanup image views
-    for (auto imageView : m_swapChainImageViews) {
-        vkDestroyImageView(m_device, imageView, nullptr);
+    if (m_device != VK_NULL_HANDLE) {
+        for (auto imageView : m_swapChainImageViews) {
+            if (imageView != VK_NULL_HANDLE) vkDestroyImageView(m_device, imageView, nullptr);
+        }
     }
+    m_swapChainImageViews.clear();
 
     // Cleanup swap chain
-    vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_swapChain != VK_NULL_HANDLE) {
+        vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+        m_swapChain = VK_NULL_HANDLE;
+    }
 
     // Cleanup uniform buffers
-    for (size_t i = 0; i < m_uniformBuffers.size(); i++) {
-        vkDestroyBuffer(m_device, m_uniformBuffers[i], nullptr);
-        vkFreeMemory(m_device, m_uniformBuffersMemory[i], nullptr);
+    if (m_device != VK_NULL_HANDLE) {
+        const size_t ubCount = std::min(m_uniformBuffers.size(), m_uniformBuffersMemory.size());
+        for (size_t i = 0; i < ubCount; i++) {
+            if (m_uniformBuffers[i] != VK_NULL_HANDLE) vkDestroyBuffer(m_device, m_uniformBuffers[i], nullptr);
+            if (m_uniformBuffersMemory[i] != VK_NULL_HANDLE) vkFreeMemory(m_device, m_uniformBuffersMemory[i], nullptr);
+        }
     }
+    m_uniformBuffers.clear();
+    m_uniformBuffersMemory.clear();
     
     // Cleanup descriptor pool
     // Cleanup graphics pipeline
-    vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_graphicsPipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(m_device, m_graphicsPipeline, nullptr);
+        m_graphicsPipeline = VK_NULL_HANDLE;
+    }
     
     // Cleanup pipeline layout
-    vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_pipelineLayout != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
+        m_pipelineLayout = VK_NULL_HANDLE;
+    }
     
     // Cleanup descriptor pool
-    vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_descriptorPool != VK_NULL_HANDLE) {
+        vkDestroyDescriptorPool(m_device, m_descriptorPool, nullptr);
+        m_descriptorPool = VK_NULL_HANDLE;
+    }
     
     // Cleanup descriptor set layout
-    vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_descriptorSetLayout != VK_NULL_HANDLE) {
+        vkDestroyDescriptorSetLayout(m_device, m_descriptorSetLayout, nullptr);
+        m_descriptorSetLayout = VK_NULL_HANDLE;
+    }
     
     // Cleanup index buffer
-    vkDestroyBuffer(m_device, m_indexBuffer, nullptr);
-    vkFreeMemory(m_device, m_indexBufferMemory, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_indexBuffer != VK_NULL_HANDLE) vkDestroyBuffer(m_device, m_indexBuffer, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_indexBufferMemory != VK_NULL_HANDLE) vkFreeMemory(m_device, m_indexBufferMemory, nullptr);
+    m_indexBuffer = VK_NULL_HANDLE;
+    m_indexBufferMemory = VK_NULL_HANDLE;
     
     // Cleanup vertex buffer
-    vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
-    vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_vertexBuffer != VK_NULL_HANDLE) vkDestroyBuffer(m_device, m_vertexBuffer, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_vertexBufferMemory != VK_NULL_HANDLE) vkFreeMemory(m_device, m_vertexBufferMemory, nullptr);
+    m_vertexBuffer = VK_NULL_HANDLE;
+    m_vertexBufferMemory = VK_NULL_HANDLE;
     
     // Cleanup texture sampler
-    vkDestroySampler(m_device, m_textureSampler, nullptr);
+    if (m_device != VK_NULL_HANDLE && m_textureSampler != VK_NULL_HANDLE) {
+        vkDestroySampler(m_device, m_textureSampler, nullptr);
+        m_textureSampler = VK_NULL_HANDLE;
+    }
     
     // Cleanup all textures
-    for (const auto& texture : m_textures) {
-        vkDestroyImageView(m_device, texture.view, nullptr);
-        vkDestroyImage(m_device, texture.image, nullptr);
-        vkFreeMemory(m_device, texture.memory, nullptr);
+    if (m_device != VK_NULL_HANDLE) {
+        for (const auto& texture : m_textures) {
+            if (texture.view != VK_NULL_HANDLE) vkDestroyImageView(m_device, texture.view, nullptr);
+            if (texture.image != VK_NULL_HANDLE) vkDestroyImage(m_device, texture.image, nullptr);
+            if (texture.memory != VK_NULL_HANDLE) vkFreeMemory(m_device, texture.memory, nullptr);
+        }
     }
+    m_textures.clear();
 
     // Cleanup logical device
-    vkDestroyDevice(m_device, nullptr);
+    if (m_device != VK_NULL_HANDLE) {
+        vkDestroyDevice(m_device, nullptr);
+        m_device = VK_NULL_HANDLE;
+    }
 
     // Cleanup surface
-    vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+    if (m_instance != VK_NULL_HANDLE && m_surface != VK_NULL_HANDLE) {
+        vkDestroySurfaceKHR(m_instance, m_surface, nullptr);
+        m_surface = VK_NULL_HANDLE;
+    }
 
     // Destroy debug messenger if enabled
     if (enableValidationLayers && m_debugMessenger != VK_NULL_HANDLE) {
@@ -412,23 +487,38 @@ void VulkanRenderer::cleanup() {
     }
 
     // Cleanup instance
-    vkDestroyInstance(m_instance, nullptr);
+    if (m_instance != VK_NULL_HANDLE) {
+        vkDestroyInstance(m_instance, nullptr);
+        m_instance = VK_NULL_HANDLE;
+    }
 
     // Destroy the window
     if (m_window) {
+#ifndef _WIN32
+        glfwDestroyWindow(m_window);
+        glfwTerminate();
+#else
         DestroyWindow(m_window);
+#endif
     }
 
     m_running = false;
 }
 
 void VulkanRenderer::render() {
+#ifndef _WIN32
+    glfwPollEvents();
+    if (m_window && glfwWindowShouldClose(m_window)) {
+        m_running = false;
+    }
+#else
     // Handle window messages
     MSG msg;
     while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
+#endif
 
     drawFrame();
 }
@@ -523,6 +613,32 @@ bool VulkanRenderer::drawFrame() {
 bool VulkanRenderer::createWindow() {
     std::cout << "Creating window..." << std::endl;
 
+#ifndef _WIN32
+    if (glfwInit() != GLFW_TRUE) {
+        std::cerr << "Failed to initialize GLFW!" << std::endl;
+        return false;
+    }
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+
+    m_window = glfwCreateWindow(
+        static_cast<int>(m_windowWidth),
+        static_cast<int>(m_windowHeight),
+        m_windowTitle.c_str(),
+        nullptr,
+        nullptr
+    );
+
+    if (!m_window) {
+        std::cerr << "Failed to create GLFW window!" << std::endl;
+        glfwTerminate();
+        return false;
+    }
+
+    std::cout << "Window created successfully." << std::endl;
+    return true;
+#else
     // Register window class
     WNDCLASSEX wc = { 0 };
     wc.cbSize = sizeof(WNDCLASSEX);
@@ -568,6 +684,7 @@ bool VulkanRenderer::createWindow() {
 
     std::cout << "Window created successfully." << std::endl;
     return true;
+#endif
 }
 
 bool VulkanRenderer::createInstance() {
@@ -703,6 +820,15 @@ bool VulkanRenderer::createLogicalDevice() {
 }
 
 bool VulkanRenderer::createSurface() {
+#ifndef _WIN32
+    if (glfwCreateWindowSurface(m_instance, m_window, nullptr, &m_surface) != VK_SUCCESS) {
+        std::cerr << "Failed to create window surface!" << std::endl;
+        return false;
+    }
+
+    std::cout << "Window surface created successfully." << std::endl;
+    return true;
+#else
     VkWin32SurfaceCreateInfoKHR createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
     createInfo.hwnd = m_window;
@@ -715,6 +841,7 @@ bool VulkanRenderer::createSurface() {
 
     std::cout << "Window surface created successfully." << std::endl;
     return true;
+#endif
 }
 
 bool VulkanRenderer::createSwapChain() {
@@ -1706,10 +1833,14 @@ bool VulkanRenderer::createGraphicsPipeline() {
     std::cout << "Creating graphics pipeline..." << std::endl;
     
     // Get current working directory
+#ifdef _WIN32
     char cwd[1024];
     if (GetCurrentDirectoryA(1024, cwd)) {
         std::cout << "Current working directory: " << cwd << std::endl;
     }
+#else
+    std::cout << "Current working directory: " << std::filesystem::current_path().string() << std::endl;
+#endif
     
     // Read shader code
     std::cout << "Reading shader code..." << std::endl;
@@ -2079,9 +2210,19 @@ bool VulkanRenderer::createSyncObjects() {
 std::vector<const char*> VulkanRenderer::getRequiredExtensions() {
     std::vector<const char*> extensions;
 
+#ifndef _WIN32
+    uint32_t glfwExtensionCount = 0;
+    const char** glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    if (glfwExtensions && glfwExtensionCount > 0) {
+        for (uint32_t i = 0; i < glfwExtensionCount; ++i) {
+            extensions.push_back(glfwExtensions[i]);
+        }
+    }
+#else
     // For Windows, we need the surface extension and Win32 surface extension
     extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
     extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#endif
 
     if (enableValidationLayers) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -2090,6 +2231,7 @@ std::vector<const char*> VulkanRenderer::getRequiredExtensions() {
     return extensions;
 }
 
+#ifdef _WIN32
 LRESULT CALLBACK VulkanRenderer::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     VulkanRenderer* renderer = nullptr;
 
@@ -2112,6 +2254,7 @@ LRESULT CALLBACK VulkanRenderer::WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam,
 
     return DefWindowProc(hwnd, uMsg, wParam, lParam);
 }
+#endif
 
 bool VulkanRenderer::createTextureImage(const std::string& path) {
     std::cout << "Attempting to load texture: " << path << std::endl;

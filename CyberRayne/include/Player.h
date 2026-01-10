@@ -30,6 +30,7 @@ public:
     bool initialize();
     void update(float deltaTime);
 #ifndef NO_VULKAN
+    void loadTexture(class VulkanRenderer* renderer);
     void render(class VulkanRenderer* renderer);
 #else
     void render();
@@ -96,6 +97,8 @@ private:
     int m_defense;
     float m_x;
     float m_y;
+    
+    int m_textureIndex;
 
     std::vector<Item*> m_inventory;
     std::vector<Spell*> m_spells;

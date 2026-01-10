@@ -40,6 +40,17 @@ bool World::initialize() {
     return true;
 }
 
+void World::loadMapTextures(VulkanRenderer* renderer) {
+    if (!renderer) return;
+    
+    std::cout << "Loading textures for all maps..." << std::endl;
+    for (auto& map : m_maps) {
+        if (map) {
+            map->loadTileTextures(renderer);
+        }
+    }
+}
+
 void World::update(float deltaTime) {
     if (m_currentMap) {
         m_currentMap->update(deltaTime);
@@ -93,10 +104,100 @@ void World::changeMap(const std::string& mapName) {
 }
 
 void World::createMaps() {
-    // Create a starting area map
-    std::unique_ptr<Map> startingArea = std::make_unique<Map>("Starting Area", 20, 15);
-    if (startingArea->initialize()) {
-        m_maps.push_back(std::move(startingArea));
+    // Create a detailed starting village map
+    std::unique_ptr<Map> startingVillage = std::make_unique<Map>("Starting Village", 30, 25);
+    if (startingVillage->initialize()) {
+        // Customize the starting village with varied terrain
+        Map* map = startingVillage.get();
+        
+        // Fill the map with grass first
+        for (int y = 0; y < map->getHeight(); ++y) {
+            for (int x = 0; x < map->getWidth(); ++x) {
+                map->setTile(x, y, std::make_unique<Tile>(Tile::TileType::GRASS, true));
+            }
+        }
+        
+        // Add trees around the edges and in clusters
+        const std::vector<std::pair<int, int>> treePositions = {
+            // Top edge trees
+            {2, 1}, {5, 1}, {8, 1}, {11, 1}, {14, 1}, {17, 1}, {20, 1}, {23, 1}, {26, 1},
+            // Bottom edge trees
+            {2, 23}, {5, 23}, {8, 23}, {11, 23}, {14, 23}, {17, 23}, {20, 23}, {23, 23}, {26, 23},
+            // Left edge trees
+            {1, 3}, {1, 6}, {1, 9}, {1, 12}, {1, 15}, {1, 18}, {1, 21},
+            // Right edge trees
+            {28, 3}, {28, 6}, {28, 9}, {28, 12}, {28, 15}, {28, 18}, {28, 21},
+            // Tree clusters
+            {4, 4}, {5, 5}, {6, 4}, {22, 4}, {23, 5}, {24, 4}, {4, 20}, {5, 19}, {6, 20}, {22, 20}, {23, 19}, {24, 20}
+        };
+        
+        for (const auto& pos : treePositions) {
+            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::TREE, false));
+        }
+        
+        // Create a small pond/stream
+        const std::vector<std::pair<int, int>> waterPositions = {
+            {25, 10}, {26, 10}, {27, 10}, {28, 10},
+            {25, 11}, {26, 11}, {27, 11}, {28, 11},
+            {26, 12}, {27, 12}, {28, 12}
+        };
+        
+        for (const auto& pos : waterPositions) {
+            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::WATER, false));
+        }
+        
+        // Create stone path from center to pond
+        const std::vector<std::pair<int, int>> pathPositions = {
+            {15, 12}, {16, 12}, {17, 12}, {18, 12}, {19, 12}, {20, 12}, {21, 12}, {22, 12}, {23, 12}, {24, 12}
+        };
+        
+        for (const auto& pos : pathPositions) {
+            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::STONE, true));
+        }
+        
+        // Create a small village building (house)
+        const std::vector<std::pair<int, int>> houseWalls = {
+            // House walls (8x6 building)
+            {10, 8}, {11, 8}, {12, 8}, {13, 8}, {14, 8}, {15, 8}, {16, 8}, {17, 8},
+            {10, 13}, {11, 13}, {12, 13}, {13, 13}, {14, 13}, {15, 13}, {16, 13}, {17, 13},
+            {10, 9}, {10, 10}, {10, 11}, {10, 12},
+            {17, 9}, {17, 10}, {17, 11}, {17, 12}
+        };
+        
+        for (const auto& pos : houseWalls) {
+            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::WALL, false));
+        }
+        
+        // House floor
+        for (int y = 9; y <= 12; ++y) {
+            for (int x = 11; x <= 16; ++x) {
+                map->setTile(x, y, std::make_unique<Tile>(Tile::TileType::FLOOR, true));
+            }
+        }
+        
+        // House door
+        map->setTile(13, 13, std::make_unique<Tile>(Tile::TileType::DOOR, true));
+        
+        // Add a village elder NPC near the house
+        {
+            auto elder = std::make_unique<NPC>("Village Elder", 14.0f, 15.0f);
+            map->addNPC(std::move(elder));
+        }
+        
+        // Add a merchant NPC
+        {
+            auto merchant = std::make_unique<NPC>("Merchant", 20.0f, 15.0f);
+            map->addNPC(std::move(merchant));
+        }
+        
+        // Add a villager NPC
+        {
+            auto villager = std::make_unique<NPC>("Villager", 8.0f, 15.0f);
+            map->addNPC(std::move(villager));
+        }
+        
+        m_maps.push_back(std::move(startingVillage));
+        std::cout << "Created starting village map with varied terrain and NPCs" << std::endl;
     }
     
     // Create a forest map

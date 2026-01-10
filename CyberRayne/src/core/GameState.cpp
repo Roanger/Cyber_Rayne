@@ -132,10 +132,19 @@ void GameState::update(float deltaTime) {
                     if (m_player) {
                         m_player->initialize();
                         
+                        // Load player texture
+                        if (m_renderer) {
+                            m_player->loadTexture(m_renderer);
+                        }
+                        
                         // Initialize world after character selection
                         m_world = new World();
                         if (m_world->initialize()) {
                             m_world->setPlayer(m_player);
+                            // Load map textures
+                            if (m_renderer) {
+                                m_world->loadMapTextures(m_renderer);
+                            }
                         }
                     }
                     

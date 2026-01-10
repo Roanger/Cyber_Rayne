@@ -3,6 +3,8 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <map>
+#include "Tile.h"
 
 class Tile;
 class Enemy;
@@ -15,6 +17,7 @@ public:
     ~Map();
 
     bool initialize();
+    void loadTileTextures(VulkanRenderer* renderer);
     void update(float deltaTime);
     void render(VulkanRenderer* renderer);
 
@@ -44,4 +47,7 @@ private:
     std::vector<std::unique_ptr<Tile>> m_tiles;
     std::vector<std::unique_ptr<Enemy>> m_enemies;
     std::vector<std::unique_ptr<NPC>> m_npcs;
+    
+    // Tile texture indices
+    std::map<Tile::TileType, int> m_tileTextures;
 };
