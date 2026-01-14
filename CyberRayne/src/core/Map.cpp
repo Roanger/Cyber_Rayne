@@ -2,7 +2,9 @@
 #include "../../include/Tile.h"
 #include "../../include/Enemy.h"
 #include "../../include/NPC.h"
+#ifndef NO_VULKAN
 #include "../../include/VulkanRenderer.h"
+#endif
 #include <iostream>
 #include <fstream>
 #include <sstream>
@@ -48,6 +50,7 @@ bool Map::initialize() {
     return true;
 }
 
+#ifndef NO_VULKAN
 void Map::loadTileTextures(VulkanRenderer* renderer) {
     if (!renderer) return;
     
@@ -128,6 +131,7 @@ void Map::loadTileTextures(VulkanRenderer* renderer) {
         std::cerr << "DOOR texture not found at: " << doorPath << std::endl;
     }
 }
+#endif
 
 void Map::update(float deltaTime) {
     // Update all enemies
@@ -141,16 +145,29 @@ void Map::update(float deltaTime) {
     }
 }
 
+#ifndef NO_VULKAN
 void Map::render(VulkanRenderer* renderer) {
-    // For now, render only a small viewport of the map to avoid excessive sprites
-    // In a real implementation, we would implement proper camera/viewport culling
+    // Render viewport of the map
+    // Screen is 800x600 (4:3 aspect ratio)
+    // To make square tiles, we need to account for screen aspect ratio
+    const int VIEWPORT_WIDTH = 15;  
+    const int VIEWPORT_HEIGHT = 15; // Same as width for square tiles
+    
+    int startX = (m_width > VIEWPORT_WIDTH) ? (m_width - VIEWPORT_WIDTH) / 2 : 0;
+    int startY = (m_height > VIEWPORT_HEIGHT) ? (m_height - VIEWPORT_HEIGHT) / 2 : 0;
+    int endX = (startX + VIEWPORT_WIDTH < m_width) ? startX + VIEWPORT_WIDTH : m_width;
+    int endY = (startY + VIEWPORT_HEIGHT < m_height) ? startY + VIEWPORT_HEIGHT : m_height;
 
-    // Define a small viewport (e.g., 10x10 tiles) around the center for testing
-    const int VIEWPORT_SIZE = 10;
-    int startX = (m_width > VIEWPORT_SIZE) ? (m_width - VIEWPORT_SIZE) / 2 : 0;
-    int startY = (m_height > VIEWPORT_SIZE) ? (m_height - VIEWPORT_SIZE) / 2 : 0;
-    int endX = (startX + VIEWPORT_SIZE < m_width) ? startX + VIEWPORT_SIZE : m_width;
-    int endY = (startY + VIEWPORT_SIZE < m_height) ? startY + VIEWPORT_SIZE : m_height;
+    // Screen aspect ratio: 800/600 = 1.333 (4:3)
+    // To make square tiles in screen space, we need to adjust for this
+    float screenAspect = 800.0f / 600.0f; // 4:3
+    
+    // Calculate tile size in normalized coordinates
+    float tileWidth = 2.0f / VIEWPORT_WIDTH;
+    float tileHeight = 2.0f / VIEWPORT_HEIGHT;
+    
+    // Adjust width to account for screen aspect ratio to make tiles square
+    tileWidth = tileHeight / screenAspect;
 
     // Render only the visible tiles
     for (int y = startY; y < endY; ++y) {
@@ -158,9 +175,8 @@ void Map::render(VulkanRenderer* renderer) {
             Tile* tile = getTile(x, y);
             if (tile) {
                 // Position calculation: convert grid coordinates to normalized device coordinates
-                // Scale to fit viewport in screen space
-                float normalizedX = ((float)(x - startX) / VIEWPORT_SIZE) * 2.0f - 1.0f;
-                float normalizedY = ((float)(y - startY) / VIEWPORT_SIZE) * 2.0f - 1.0f;
+                float normalizedX = -1.0f + (x - startX) * tileWidth + tileWidth * 0.5f;
+                float normalizedY = -1.0f + (y - startY) * tileHeight + tileHeight * 0.5f;
 
                 // Get texture index for this tile type
                 int textureIndex = -1;
@@ -169,17 +185,18 @@ void Map::render(VulkanRenderer* renderer) {
                     textureIndex = it->second;
                 }
                 
-                // Render tile with appropriate texture
+                // Render tile with square aspect ratio
                 if (textureIndex >= 0) {
-                    renderer->renderSpriteWithTexture(normalizedX, normalizedY, 0.2f, 0.2f, textureIndex);
+                    renderer->renderSpriteWithTexture(normalizedX, normalizedY, tileWidth, tileHeight, textureIndex);
                 } else {
                     // Fallback to default white sprite if no texture
-                    renderer->renderSprite(normalizedX, normalizedY, 0.2f, 0.2f);
+                    renderer->renderSprite(normalizedX, normalizedY, tileWidth, tileHeight);
                 }
             }
         }
     }
 }
+#endif
 
 Tile* Map::getTile(int x, int y) const {
     if (x < 0 || x >= m_width || y < 0 || y >= m_height) {

@@ -1,6 +1,7 @@
 #include "../../include/Player.h"
 #include "../../include/Item.h"
 #include "../../include/Spell.h"
+#include "../../include/Map.h"
 #ifndef NO_VULKAN
 #include "../../include/VulkanRenderer.h"
 #endif
@@ -11,7 +12,8 @@
 Player::Player(CharacterClass charClass, const std::string& name)
     : m_characterClass(charClass), m_name(name), m_level(1), m_health(100), m_mana(50),
       m_maxHealth(100), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
-      m_x(0.0f), m_y(0.0f), m_textureIndex(-1) {
+      m_x(0.0f), m_y(0.0f), m_startX(0.0f), m_startY(0.0f), m_targetX(0.0f), m_targetY(0.0f), 
+      m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(4.0f), m_textureIndex(-1) {
     initializeStats();
 }
 
@@ -19,7 +21,8 @@ Player::Player(CharacterClass charClass, const std::string& name)
 Player::Player() 
     : m_characterClass(CharacterClass::WARRIOR), m_name("DefaultPlayer"), m_level(1), 
       m_health(100), m_mana(50), m_maxHealth(100), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
-      m_x(0.0f), m_y(0.0f), m_textureIndex(-1) {
+      m_x(0.0f), m_y(0.0f), m_startX(0.0f), m_startY(0.0f), m_targetX(0.0f), m_targetY(0.0f), 
+      m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(4.0f), m_textureIndex(-1) {
     // Initialize with default values
 }
 
@@ -32,9 +35,23 @@ bool Player::initialize() {
 }
 
 void Player::update(float deltaTime) {
-    // In a real implementation, we would update player state here
-    // For now, we'll just print a message
-    // std::cout << "Updating player: " << m_name << std::endl;
+    // Handle smooth movement interpolation
+    if (m_isMoving) {
+        // Increment movement progress based on speed and deltaTime
+        m_moveProgress += m_moveSpeed * deltaTime;
+        
+        if (m_moveProgress >= 1.0f) {
+            // Movement complete - snap to target position
+            m_x = m_targetX;
+            m_y = m_targetY;
+            m_isMoving = false;
+            m_moveProgress = 0.0f;
+        } else {
+            // Linear interpolation between start and target
+            m_x = m_startX + (m_targetX - m_startX) * m_moveProgress;
+            m_y = m_startY + (m_targetY - m_startY) * m_moveProgress;
+        }
+    }
 }
 
 #ifndef NO_VULKAN
@@ -207,4 +224,47 @@ void Player::levelUp() {
     }
     
     std::cout << m_name << " leveled up to level " << m_level << "!" << std::endl;
+}
+
+void Player::move(float dx, float dy, Map* map) {
+    if (!map) return;
+    
+    // Don't allow new movement if already moving
+    if (m_isMoving) return;
+    
+    // Calculate target tile position
+    int currentTileX = static_cast<int>(m_x);
+    int currentTileY = static_cast<int>(m_y);
+    int targetTileX = currentTileX + static_cast<int>(dx);
+    int targetTileY = currentTileY + static_cast<int>(dy);
+    
+    // Check if the target tile is walkable
+    if (map->isTileWalkable(targetTileX, targetTileY)) {
+        // Start smooth movement
+        m_startX = m_x;
+        m_startY = m_y;
+        m_targetX = static_cast<float>(targetTileX);
+        m_targetY = static_cast<float>(targetTileY);
+        m_isMoving = true;
+        m_moveProgress = 0.0f;
+        std::cout << m_name << " moving to (" << m_targetX << ", " << m_targetY << ")" << std::endl;
+    } else {
+        std::cout << m_name << " cannot move there - tile is blocked!" << std::endl;
+    }
+}
+
+void Player::moveUp(Map* map) {
+    move(0.0f, -1.0f, map);
+}
+
+void Player::moveDown(Map* map) {
+    move(0.0f, 1.0f, map);
+}
+
+void Player::moveLeft(Map* map) {
+    move(-1.0f, 0.0f, map);
+}
+
+void Player::moveRight(Map* map) {
+    move(1.0f, 0.0f, map);
 }

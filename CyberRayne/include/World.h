@@ -42,6 +42,9 @@ public:
     
     // Enemy encounter
     bool checkEnemyEncounter();
+    
+    // Map transitions
+    void checkMapTransition();
 
 private:
     void createMaps();

@@ -63,6 +63,9 @@ set(TEST_SOURCES
     src/entities/EnemyTypes.cpp
     src/entities/Item.cpp
     src/entities/Spell.cpp
+    src/entities/NPC.cpp
+    src/core/Map.cpp
+    src/core/Tile.cpp
 )
 
 # Add battle system test executable

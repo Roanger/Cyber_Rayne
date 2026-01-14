@@ -145,6 +145,9 @@ void GameState::update(float deltaTime) {
                             if (m_renderer) {
                                 m_world->loadMapTextures(m_renderer);
                             }
+                            
+                            // Set player spawn position in the starting village (on grass, south of house)
+                            m_player->setPosition(15.0f, 16.0f);
                         }
                     }
                     
@@ -159,6 +162,9 @@ void GameState::update(float deltaTime) {
             // Update world
             if (m_world) {
                 m_world->update(deltaTime);
+                
+                // Check for map transitions
+                m_world->checkMapTransition();
                 
                 // Check for enemy encounters
                 if (m_world->checkEnemyEncounter()) {
@@ -268,8 +274,39 @@ void GameState::render(VulkanRenderer* renderer) {
     }
     
     // Render player if in world exploration state
-    if (m_currentState == State::WORLD_EXPLORATION && m_player) {
-        m_player->render(renderer);
+    if (m_currentState == State::WORLD_EXPLORATION && m_player && m_world && m_world->getCurrentMap()) {
+        // Calculate viewport-relative position for player
+        Map* currentMap = m_world->getCurrentMap();
+        const int VIEWPORT_WIDTH = 15;
+        const int VIEWPORT_HEIGHT = 15;
+        int mapWidth = currentMap->getWidth();
+        int mapHeight = currentMap->getHeight();
+        int startX = (mapWidth > VIEWPORT_WIDTH) ? (mapWidth - VIEWPORT_WIDTH) / 2 : 0;
+        int startY = (mapHeight > VIEWPORT_HEIGHT) ? (mapHeight - VIEWPORT_HEIGHT) / 2 : 0;
+        
+        // Calculate tile size (same as in Map::render)
+        float screenAspect = 800.0f / 600.0f;
+        float tileWidth = 2.0f / VIEWPORT_WIDTH;
+        float tileHeight = 2.0f / VIEWPORT_HEIGHT;
+        tileWidth = tileHeight / screenAspect;
+        
+        // Convert player world position to viewport-relative normalized coordinates
+        float playerX = m_player->getX();
+        float playerY = m_player->getY();
+        float normalizedX = -1.0f + (playerX - startX) * tileWidth + tileWidth * 0.5f;
+        float normalizedY = -1.0f + (playerY - startY) * tileHeight + tileHeight * 0.5f;
+        
+        // Render player at viewport-relative position
+        if (m_player->getX() >= startX && m_player->getX() < startX + VIEWPORT_WIDTH &&
+            m_player->getY() >= startY && m_player->getY() < startY + VIEWPORT_HEIGHT) {
+            // Player is within viewport, render using texture
+            int textureIndex = m_player->getTextureIndex();
+            if (textureIndex >= 0) {
+                renderer->renderSpriteWithTexture(normalizedX, normalizedY, tileWidth, tileHeight, textureIndex);
+            } else {
+                renderer->renderSprite(normalizedX, normalizedY, tileWidth, tileHeight);
+            }
+        }
     }
 }
 
@@ -278,6 +315,25 @@ void GameState::handleInput(int key) {
         m_menuSystem->handleInput(key);
     } else if (m_currentState == State::CHARACTER_SELECTION && m_charSelectionSystem) {
         m_charSelectionSystem->handleInput(key);
+    } else if (m_currentState == State::WORLD_EXPLORATION && m_player && m_world) {
+        // Handle player movement in world exploration
+        Map* currentMap = m_world->getCurrentMap();
+        if (currentMap) {
+            switch (key) {
+                case 0: // Up
+                    m_player->moveUp(currentMap);
+                    break;
+                case 1: // Down
+                    m_player->moveDown(currentMap);
+                    break;
+                case 3: // Left
+                    m_player->moveLeft(currentMap);
+                    break;
+                case 4: // Right
+                    m_player->moveRight(currentMap);
+                    break;
+            }
+        }
     } else if (m_currentState == State::BATTLE && m_uiManager) {
         m_uiManager->handleInput(key);
     }

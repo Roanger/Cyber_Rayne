@@ -17,9 +17,13 @@ public:
     ~Map();
 
     bool initialize();
+#ifndef NO_VULKAN
     void loadTileTextures(VulkanRenderer* renderer);
+#endif
     void update(float deltaTime);
+#ifndef NO_VULKAN
     void render(VulkanRenderer* renderer);
+#endif
 
     // Tile management
     Tile* getTile(int x, int y) const;

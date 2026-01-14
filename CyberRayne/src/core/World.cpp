@@ -196,14 +196,98 @@ void World::createMaps() {
             map->addNPC(std::move(villager));
         }
         
+        // Add transition zone at top (to forest)
+        // Player stepping on these tiles will transition to forest
+        const std::vector<std::pair<int, int>> transitionToForest = {
+            {14, 1}, {15, 1}, {16, 1}
+        };
+        
+        for (const auto& pos : transitionToForest) {
+            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::STONE, true));
+        }
+        
         m_maps.push_back(std::move(startingVillage));
         std::cout << "Created starting village map with varied terrain and NPCs" << std::endl;
     }
     
-    // Create a forest map
+    // Create a detailed forest map
     std::unique_ptr<Map> forest = std::make_unique<Map>("Forest", 30, 25);
     if (forest->initialize()) {
+        Map* forestMap = forest.get();
+        
+        // Fill the forest with grass base
+        for (int y = 0; y < forestMap->getHeight(); ++y) {
+            for (int x = 0; x < forestMap->getWidth(); ++x) {
+                forestMap->setTile(x, y, std::make_unique<Tile>(Tile::TileType::GRASS, true));
+            }
+        }
+        
+        // Add dense tree coverage
+        const std::vector<std::pair<int, int>> forestTrees = {
+            // Top dense forest
+            {3, 2}, {4, 2}, {5, 2}, {6, 2}, {7, 2}, {8, 2}, {9, 2}, {10, 2},
+            {3, 3}, {4, 3}, {5, 3}, {6, 3}, {7, 3}, {8, 3}, {9, 3}, {10, 3},
+            {3, 4}, {4, 4}, {5, 4}, {6, 4}, {7, 4}, {8, 4}, {9, 4}, {10, 4},
+            // Right dense forest
+            {20, 5}, {21, 5}, {22, 5}, {23, 5}, {24, 5}, {25, 5}, {26, 5},
+            {20, 6}, {21, 6}, {22, 6}, {23, 6}, {24, 6}, {25, 6}, {26, 6},
+            {20, 7}, {21, 7}, {22, 7}, {23, 7}, {24, 7}, {25, 7}, {26, 7},
+            {20, 8}, {21, 8}, {22, 8}, {23, 8}, {24, 8}, {25, 8}, {26, 8},
+            // Left dense forest
+            {2, 10}, {3, 10}, {4, 10}, {5, 10}, {6, 10},
+            {2, 11}, {3, 11}, {4, 11}, {5, 11}, {6, 11},
+            {2, 12}, {3, 12}, {4, 12}, {5, 12}, {6, 12},
+            {2, 13}, {3, 13}, {4, 13}, {5, 13}, {6, 13},
+            // Scattered trees in center
+            {12, 8}, {13, 9}, {14, 8}, {15, 10}, {16, 9}, {17, 11},
+            {12, 15}, {13, 16}, {14, 15}, {15, 17}, {16, 16}, {17, 18},
+            // Bottom forest edge
+            {8, 20}, {9, 20}, {10, 20}, {11, 20}, {12, 20}, {13, 20}, {14, 20},
+            {8, 21}, {9, 21}, {10, 21}, {11, 21}, {12, 21}, {13, 21}, {14, 21},
+            {8, 22}, {9, 22}, {10, 22}, {11, 22}, {12, 22}, {13, 22}, {14, 22}
+        };
+        
+        for (const auto& pos : forestTrees) {
+            forestMap->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::TREE, false));
+        }
+        
+        // Add a small clearing with stone path
+        const std::vector<std::pair<int, int>> forestPath = {
+            {15, 12}, {15, 13}, {15, 14}, {15, 15}, {15, 16}
+        };
+        
+        for (const auto& pos : forestPath) {
+            forestMap->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::STONE, true));
+        }
+        
+        // Add a small pond
+        const std::vector<std::pair<int, int>> forestWater = {
+            {18, 13}, {19, 13}, {20, 13},
+            {18, 14}, {19, 14}, {20, 14}
+        };
+        
+        for (const auto& pos : forestWater) {
+            forestMap->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::WATER, false));
+        }
+        
+        // Add transition zone at bottom (to return to village)
+        // Player stepping on these tiles will transition back to village
+        const std::vector<std::pair<int, int>> transitionToVillage = {
+            {14, 24}, {15, 24}, {16, 24}
+        };
+        
+        for (const auto& pos : transitionToVillage) {
+            forestMap->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::STONE, true));
+        }
+        
+        // Add a forest NPC
+        {
+            auto ranger = std::make_unique<NPC>("Forest Ranger", 15.0f, 12.0f);
+            forestMap->addNPC(std::move(ranger));
+        }
+        
         m_maps.push_back(std::move(forest));
+        std::cout << "Created forest map with dense trees and clearing" << std::endl;
     }
     
     // Create a town map
@@ -228,6 +312,37 @@ void World::spawnEnemies() {
         
         // Spawn new enemies based on the current biome
         spawnEnemiesForBiome(m_currentBiome, m_currentMap);
+    }
+}
+
+void World::checkMapTransition() {
+    if (!m_currentMap || !m_player) {
+        return;
+    }
+    
+    // Get player position
+    int playerTileX = static_cast<int>(m_player->getX());
+    int playerTileY = static_cast<int>(m_player->getY());
+    
+    // Check if player is on a transition tile
+    std::string currentMapName = m_currentMap->getName();
+    
+    if (currentMapName == "Starting Village") {
+        // Transition to Forest (top of map)
+        if (playerTileY <= 1 && playerTileX >= 14 && playerTileX <= 16) {
+            std::cout << "Transitioning to Forest..." << std::endl;
+            changeMap("Forest");
+            // Place player at bottom of forest map
+            m_player->setPosition(15.0f, 23.0f);
+        }
+    } else if (currentMapName == "Forest") {
+        // Transition back to Village (bottom of map)
+        if (playerTileY >= 24 && playerTileX >= 14 && playerTileX <= 16) {
+            std::cout << "Transitioning to Starting Village..." << std::endl;
+            changeMap("Starting Village");
+            // Place player at top of village map
+            m_player->setPosition(15.0f, 2.0f);
+        }
     }
 }
 

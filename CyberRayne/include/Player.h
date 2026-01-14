@@ -50,6 +50,7 @@ public:
     int getMaxMana() const { return m_maxMana; }
     float getX() const { return m_x; }
     float getY() const { return m_y; }
+    int getTextureIndex() const { return m_textureIndex; }
 
     // Setters
     void setName(const std::string& name) { m_name = name; }
@@ -57,6 +58,13 @@ public:
     void setHealth(int health) { m_health = health; }
     void setMana(int mana) { m_mana = mana; }
     void setPosition(float x, float y) { m_x = x; m_y = y; }
+    
+    // Movement
+    void move(float dx, float dy, class Map* map);
+    void moveUp(class Map* map);
+    void moveDown(class Map* map);
+    void moveLeft(class Map* map);
+    void moveRight(class Map* map);
 
     // Combat functions
     void takeDamage(int damage);
@@ -97,6 +105,15 @@ private:
     int m_defense;
     float m_x;
     float m_y;
+    
+    // Movement state for smooth interpolation
+    float m_startX;
+    float m_startY;
+    float m_targetX;
+    float m_targetY;
+    bool m_isMoving;
+    float m_moveProgress;
+    float m_moveSpeed; // tiles per second
     
     int m_textureIndex;
 
