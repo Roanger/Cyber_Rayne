@@ -47,6 +47,7 @@ jobs:
 
       - name: Build CyberRayne
         run: |
+          cd CyberRayne
           cmake -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release
 
@@ -57,19 +58,20 @@ jobs:
           ROANGER_PERFORMANCE_AUDITOR_ENABLE: "1"
           AUDITOR_SESSION_ID: ${{ github.sha }}
           AUDITOR_COMMIT_SHA: ${{ github.sha }}
-          AUDITOR_OUTPUT_PATH: ./benchmark_results
+          AUDITOR_OUTPUT_PATH: ${{ github.workspace }}/benchmark_results
           AUDITOR_LOCAL_EXPORT: "1"
           # Use software rendering for CI (no GPU)
           LIBGL_ALWAYS_SOFTWARE: "1"
           VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
         run: |
           mkdir -p benchmark_results
+          cd CyberRayne
           
           # Run benchmark mode - 500 frames then exit
           timeout 120 ./build/CyberRayne --benchmark --frames 500 || true
           
           # List output files
-          ls -la benchmark_results/ || echo "No results directory"
+          ls -la ${{ github.workspace }}/benchmark_results/ || echo "No results directory"
 
       - name: Upload Results
         uses: actions/upload-artifact@v4
