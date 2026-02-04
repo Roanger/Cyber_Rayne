@@ -39,6 +39,7 @@ jobs:
             libxrandr-dev \
             glslang-tools \
             mesa-vulkan-drivers \
+            vulkan-tools \
             xvfb
 
       - name: Build Performance Layer
@@ -53,6 +54,15 @@ jobs:
           cmake -B build -DCMAKE_BUILD_TYPE=Release
           cmake --build build --config Release
 
+      - name: Debug Vulkan Setup
+        run: |
+          echo "=== Available Vulkan ICDs ==="
+          ls -la /usr/share/vulkan/icd.d/ || echo "No ICDs found"
+          cat /usr/share/vulkan/icd.d/*.json 2>/dev/null || echo "Cannot read ICDs"
+          echo ""
+          echo "=== Vulkan Info ==="
+          vulkaninfo --summary 2>&1 | head -50 || echo "vulkaninfo not available"
+
       - name: Run Benchmark
         env:
           VK_LAYER_PATH: ${{ github.workspace }}/performance-auditor/build/layer
@@ -64,10 +74,18 @@ jobs:
           AUDITOR_LOCAL_EXPORT: "1"
           # Use software rendering for CI (no GPU)
           LIBGL_ALWAYS_SOFTWARE: "1"
-          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
         run: |
           mkdir -p benchmark_results
           cd CyberRayne
+          
+          # Find lavapipe ICD dynamically
+          LAVAPIPE_ICD=$(find /usr/share/vulkan/icd.d -name "*lvp*" -o -name "*lavapipe*" 2>/dev/null | head -1)
+          if [ -n "$LAVAPIPE_ICD" ]; then
+            echo "Using Lavapipe ICD: $LAVAPIPE_ICD"
+            export VK_ICD_FILENAMES="$LAVAPIPE_ICD"
+          else
+            echo "No lavapipe ICD found, using default"
+          fi
           
           # Run benchmark mode with virtual display (Xvfb)
           # xvfb-run creates a virtual X server for GLFW
