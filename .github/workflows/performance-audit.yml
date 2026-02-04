@@ -32,7 +32,8 @@ jobs:
             cmake \
             build-essential \
             libvulkan-dev \
-            vulkan-validationlayers-dev \
+            vulkan-utility-libraries-dev \
+            vulkan-validationlayers \
             libglfw3-dev \
             libx11-dev \
             libxrandr-dev \
