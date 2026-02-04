@@ -38,7 +38,8 @@ jobs:
             libx11-dev \
             libxrandr-dev \
             glslang-tools \
-            mesa-vulkan-drivers
+            mesa-vulkan-drivers \
+            xvfb
 
       - name: Build Performance Layer
         run: |
@@ -68,8 +69,10 @@ jobs:
           mkdir -p benchmark_results
           cd CyberRayne
           
-          # Run benchmark mode - 500 frames then exit
-          timeout 120 ./build/CyberRayne --benchmark --frames 500 || true
+          # Run benchmark mode with virtual display (Xvfb)
+          # xvfb-run creates a virtual X server for GLFW
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24" \
+            timeout 120 ./build/CyberRayne --benchmark --frames 500 || true
           
           # List output files
           ls -la ${{ github.workspace }}/benchmark_results/ || echo "No results directory"
