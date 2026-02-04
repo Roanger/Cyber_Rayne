@@ -10,7 +10,15 @@
 #include <thread>
 #include <chrono>
 
-Game::Game() : m_gameState(nullptr), m_renderer(nullptr), m_running(false) {}
+Game::Game() : m_gameState(nullptr), m_renderer(nullptr), m_running(false),
+               m_benchmarkMode(false), m_maxBenchmarkFrames(500), m_benchmarkFrameCount(0) {}
+
+void Game::setBenchmarkMode(bool enabled, int maxFrames) {
+    m_benchmarkMode = enabled;
+    m_maxBenchmarkFrames = maxFrames;
+    std::cout << "Benchmark mode: " << (enabled ? "ON" : "OFF") 
+              << " (max frames: " << maxFrames << ")" << std::endl;
+}
 
 Game::~Game() {
     shutdown();
@@ -135,6 +143,15 @@ void Game::run() {
         // Check for game exit state
         if (m_gameState && m_gameState->getCurrentState() == GameState::State::EXIT) {
             m_running = false;
+        }
+        
+        // Benchmark mode: exit after max frames
+        if (m_benchmarkMode) {
+            m_benchmarkFrameCount++;
+            if (m_benchmarkFrameCount >= m_maxBenchmarkFrames) {
+                std::cout << "Benchmark complete: " << m_benchmarkFrameCount << " frames rendered." << std::endl;
+                m_running = false;
+            }
         }
         
         // Cap frame rate

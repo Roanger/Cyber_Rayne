@@ -1,0 +1,108 @@
+# Performance Audit CI/CD workflow for CyberRayne
+# Runs benchmark on push/PR and reports performance metrics
+name: Performance Audit
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  performance-audit:
+    name: Performance Benchmark
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Game
+        uses: actions/checkout@v4
+
+      - name: Checkout Performance Auditor
+        uses: actions/checkout@v4
+        with:
+          repository: Roanger/performance-auditor
+          path: performance-auditor
+          token: ${{ secrets.PAT_TOKEN }}
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            build-essential \
+            libvulkan-dev \
+            vulkan-validationlayers-dev \
+            libglfw3-dev \
+            libx11-dev \
+            libxrandr-dev \
+            glslang-tools \
+            mesa-vulkan-drivers
+
+      - name: Build Performance Layer
+        run: |
+          cd performance-auditor
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_GRPC_CLIENT=OFF
+          cmake --build build --config Release
+
+      - name: Build CyberRayne
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release
+
+      - name: Run Benchmark
+        env:
+          VK_LAYER_PATH: ${{ github.workspace }}/performance-auditor/build/layer
+          VK_INSTANCE_LAYERS: VK_LAYER_ROANGER_performance_auditor
+          ROANGER_PERFORMANCE_AUDITOR_ENABLE: "1"
+          AUDITOR_SESSION_ID: ${{ github.sha }}
+          AUDITOR_COMMIT_SHA: ${{ github.sha }}
+          AUDITOR_OUTPUT_PATH: ./benchmark_results
+          AUDITOR_LOCAL_EXPORT: "1"
+          # Use software rendering for CI (no GPU)
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+        run: |
+          mkdir -p benchmark_results
+          
+          # Run benchmark mode - 500 frames then exit
+          timeout 120 ./build/CyberRayne --benchmark --frames 500 || true
+          
+          # List output files
+          ls -la benchmark_results/ || echo "No results directory"
+
+      - name: Upload Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ github.sha }}
+          path: benchmark_results/
+          retention-days: 30
+        if: always()
+
+      - name: Parse and Report Results
+        run: |
+          SUMMARY=$(find benchmark_results -name "*_summary.json" 2>/dev/null | head -1)
+          
+          if [ -f "$SUMMARY" ]; then
+            echo "## Performance Results" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Commit:** \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            P95=$(jq -r '.frame_time.p95_ms // .sessionStats.p95FrameTime // "N/A"' "$SUMMARY")
+            AVG=$(jq -r '.frame_time.avg_ms // .sessionStats.avgFrameTime // "N/A"' "$SUMMARY")
+            FRAMES=$(jq -r '.total_frames // .sessionStats.totalFrames // "N/A"' "$SUMMARY")
+            DRAW_CALLS=$(jq -r '.draw_calls.avg // "N/A"' "$SUMMARY")
+            
+            echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Total Frames | $FRAMES |" >> $GITHUB_STEP_SUMMARY
+            echo "| Avg Frame Time | $AVG ms |" >> $GITHUB_STEP_SUMMARY
+            echo "| P95 Frame Time | $P95 ms |" >> $GITHUB_STEP_SUMMARY
+            echo "| Avg Draw Calls | $DRAW_CALLS |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "::warning::No benchmark results found in benchmark_results/"
+            echo "## Performance Audit" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ No benchmark results found. Check if the game ran correctly." >> $GITHUB_STEP_SUMMARY
+          fi
+        if: always()
