@@ -72,10 +72,7 @@ void CharacterSelectionSystem::update(float deltaTime) {
     }
 }
 
-void CharacterSelectionSystem::handleInput(int key) {
-    // Key codes from Game.cpp:
-    // 0 = UP, 1 = DOWN, 2 = ENTER, 3 = LEFT, 4 = RIGHT
-    
+void CharacterSelectionSystem::handleInput(InputAction action) {
     if (m_characterSelected) return;  // Already selected
     
     // Wait for all keys to be released first (prevents instant selection from menu)
@@ -92,17 +89,17 @@ void CharacterSelectionSystem::handleInput(int key) {
     // Check cooldown to prevent rapid input
     if (m_inputCooldown > 0.0f) return;
     
-    if (key == 3) {  // Left arrow
+    if (action == InputAction::MOVE_LEFT) {
         m_selectedIndex = (m_selectedIndex - 1 + static_cast<int>(m_characterOptions.size())) % m_characterOptions.size();
         std::cout << "Character selection: moved to " << m_characterOptions[m_selectedIndex].name << std::endl;
         m_inputCooldown = 0.2f;  // Debounce delay
     }
-    else if (key == 4) {  // Right arrow
+    else if (action == InputAction::MOVE_RIGHT) {
         m_selectedIndex = (m_selectedIndex + 1) % m_characterOptions.size();
         std::cout << "Character selection: moved to " << m_characterOptions[m_selectedIndex].name << std::endl;
         m_inputCooldown = 0.2f;  // Debounce delay
     }
-    else if (key == 2) {  // Enter key
+    else if (action == InputAction::CONFIRM) {
         confirmSelection();
     }
 }
@@ -116,8 +113,6 @@ void CharacterSelectionSystem::confirmSelection() {
 
 #ifndef NO_VULKAN
 void CharacterSelectionSystem::render(VulkanRenderer* renderer) {
-    std::cout << "Rendering character selection UI" << std::endl;
-    
     // Screen dimensions (1920x1080)
     const int screenW = 1920;
     const int screenH = 1080;
@@ -157,9 +152,6 @@ void CharacterSelectionSystem::render(VulkanRenderer* renderer) {
         }
     }
     
-    // Debug output for navigation
-    std::cout << "Selected character: " << m_selectedIndex << " (" 
-              << m_characterOptions[m_selectedIndex].name << ")" << std::endl;
 }
 #else
 void CharacterSelectionSystem::render() {
@@ -196,13 +188,13 @@ void CharacterSelectionSystem::selectCharacter(int index) {
     }
 }
 
-Player* CharacterSelectionSystem::createSelectedCharacter() const {
+std::unique_ptr<Player> CharacterSelectionSystem::createSelectedCharacter() const {
     if (!m_characterSelected) {
         return nullptr;
     }
     
     const CharacterOption& selected = m_characterOptions[m_selectedIndex];
-    return new Player(selected.charClass, selected.name);
+    return std::make_unique<Player>(selected.charClass, selected.name);
 }
 
 const std::string& CharacterSelectionSystem::getStarterQuestForSelectedCharacter() const {

@@ -4,7 +4,8 @@
 
 // Forest Biome Enemies
 Goblin::Goblin(int level) : Enemy("Goblin", level) {
-    // Constructor is empty since initializeStats is called by Enemy constructor
+    // Apply derived stats after base construction because constructor dispatch uses Enemy::initializeStats.
+    initializeStats();
 }
 
 void Goblin::initializeStats() {
@@ -22,7 +23,8 @@ void Goblin::initializeStats() {
 }
 
 Wolf::Wolf(int level) : Enemy("Wolf", level) {
-    // Constructor is empty since initializeStats is called by Enemy constructor
+    // Apply derived stats after base construction because constructor dispatch uses Enemy::initializeStats.
+    initializeStats();
 }
 
 void Wolf::initializeStats() {
@@ -40,7 +42,8 @@ void Wolf::initializeStats() {
 }
 
 Treant::Treant(int level) : Enemy("Treant", level) {
-    // Constructor is empty since initializeStats is called by Enemy constructor
+    // Apply derived stats after base construction because constructor dispatch uses Enemy::initializeStats.
+    initializeStats();
 }
 
 void Treant::initializeStats() {
@@ -59,7 +62,8 @@ void Treant::initializeStats() {
 
 // Desert Biome Enemies
 SandScorpion::SandScorpion(int level) : Enemy("Sand Scorpion", level) {
-    // Constructor is empty since initializeStats is called by Enemy constructor
+    // Apply derived stats after base construction because constructor dispatch uses Enemy::initializeStats.
+    initializeStats();
 }
 
 void SandScorpion::initializeStats() {
@@ -77,7 +81,8 @@ void SandScorpion::initializeStats() {
 }
 
 DesertBandit::DesertBandit(int level) : Enemy("Desert Bandit", level) {
-    // Constructor is empty since initializeStats is called by Enemy constructor
+    // Apply derived stats after base construction because constructor dispatch uses Enemy::initializeStats.
+    initializeStats();
 }
 
 void DesertBandit::initializeStats() {
@@ -96,7 +101,8 @@ void DesertBandit::initializeStats() {
 
 // Mountain Biome Enemies
 MountainLion::MountainLion(int level) : Enemy("Mountain Lion", level) {
-    // Constructor is empty since initializeStats is called by Enemy constructor
+    // Apply derived stats after base construction because constructor dispatch uses Enemy::initializeStats.
+    initializeStats();
 }
 
 void MountainLion::initializeStats() {
@@ -114,7 +120,8 @@ void MountainLion::initializeStats() {
 }
 
 StoneGolem::StoneGolem(int level) : Enemy("Stone Golem", level) {
-    // Constructor is empty since initializeStats is called by Enemy constructor
+    // Apply derived stats after base construction because constructor dispatch uses Enemy::initializeStats.
+    initializeStats();
 }
 
 void StoneGolem::initializeStats() {
@@ -133,7 +140,8 @@ void StoneGolem::initializeStats() {
 
 // Swamp Biome Enemies
 Zombie::Zombie(int level) : Enemy("Zombie", level) {
-    // Constructor is empty since initializeStats is called by Enemy constructor
+    // Apply derived stats after base construction because constructor dispatch uses Enemy::initializeStats.
+    initializeStats();
 }
 
 void Zombie::initializeStats() {
@@ -151,7 +159,8 @@ void Zombie::initializeStats() {
 }
 
 PoisonToad::PoisonToad(int level) : Enemy("Poison Toad", level) {
-    // Constructor is empty since initializeStats is called by Enemy constructor
+    // Apply derived stats after base construction because constructor dispatch uses Enemy::initializeStats.
+    initializeStats();
 }
 
 void PoisonToad::initializeStats() {

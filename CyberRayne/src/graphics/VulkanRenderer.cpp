@@ -87,7 +87,9 @@ std::string findShadersDirectory() {
 }
 
 // Convenience: pixel-based rendering helper. Positions use top-left pixel origin.
-void VulkanRenderer::renderSpritePixelsWithTexture(int leftPx, int topPx, int widthPx, int heightPx, int textureIndex) {
+void VulkanRenderer::renderSpritePixelsWithTexture(int leftPx, int topPx, int widthPx, int heightPx, int textureIndex,
+                                                   float r, float g, float b, float a,
+                                                   float u0, float v0, float u1, float v1) {
     if (m_swapChainExtent.width == 0 || m_swapChainExtent.height == 0) {
         return;
     }
@@ -101,7 +103,12 @@ void VulkanRenderer::renderSpritePixelsWithTexture(int leftPx, int topPx, int wi
     float ndcX = -1.0f + 2.0f * (centerXpx / static_cast<float>(m_swapChainExtent.width));
     float ndcY = -1.0f + 2.0f * (centerYpx / static_cast<float>(m_swapChainExtent.height));
 
-    renderSpriteWithTexture(ndcX, ndcY, ndcWidth, ndcHeight, textureIndex);
+    renderSpriteWithTexture(ndcX, ndcY, ndcWidth, ndcHeight, textureIndex, r, g, b, a, u0, v0, u1, v1);
+}
+
+void VulkanRenderer::renderColoredRectPixels(int leftPx, int topPx, int widthPx, int heightPx,
+                                             float r, float g, float b, float a) {
+    renderSpritePixelsWithTexture(leftPx, topPx, widthPx, heightPx, getWhiteTextureIndex(), r, g, b, a);
 }
 
 // Debug messenger helpers
@@ -1120,9 +1127,13 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
             }
         }
         
-        // Push constants: x, y, width, height
-        float pushData[4] = { transform.x, transform.y, transform.width, transform.height };
-        vkCmdPushConstants(commandBuffer, m_pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(pushData), pushData);
+        // Push constants: x, y, width, height, color, uv offset/scale
+        float pushData[12] = { transform.x, transform.y, transform.width, transform.height,
+                               transform.r, transform.g, transform.b, transform.a,
+                               transform.u0, transform.v0, transform.uScale, transform.vScale };
+        vkCmdPushConstants(commandBuffer, m_pipelineLayout,
+                           VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                           0, sizeof(pushData), pushData);
         
         vkCmdDrawIndexed(commandBuffer, 6, 1, 0, 0, 0);
     }
@@ -1154,7 +1165,9 @@ void VulkanRenderer::renderColoredRect(VkCommandBuffer commandBuffer, float x, f
     // This is just to show where actual rendering code would go
 }
 
-void VulkanRenderer::renderSpriteWithTexture(float x, float y, float width, float height, int textureIndex) {
+void VulkanRenderer::renderSpriteWithTexture(float x, float y, float width, float height, int textureIndex,
+                                             float r, float g, float b, float a,
+                                             float u0, float v0, float u1, float v1) {
     // Store the sprite transform data for later use in recordCommandBuffer
     if (m_spritesToRender < MAX_SPRITES) {
         SpriteTransform& transform = m_spriteTransforms[m_spritesToRender];
@@ -1162,6 +1175,14 @@ void VulkanRenderer::renderSpriteWithTexture(float x, float y, float width, floa
         transform.y = y;
         transform.width = width;
         transform.height = height;
+        transform.r = r;
+        transform.g = g;
+        transform.b = b;
+        transform.a = a;
+        transform.u0 = u0;
+        transform.v0 = v0;
+        transform.uScale = u1 - u0;
+        transform.vScale = v1 - v0;
         transform.textureIndex = textureIndex;
 
         // Increment sprite counter
@@ -1176,7 +1197,8 @@ void VulkanRenderer::renderSpriteWithTexture(float x, float y, float width, floa
     }
 }
 
-void VulkanRenderer::renderSprite(float x, float y, float width, float height) {
+void VulkanRenderer::renderSprite(float x, float y, float width, float height, float r, float g, float b, float a,
+                                  float u0, float v0, float u1, float v1) {
     // Store the sprite transform data for later use in recordCommandBuffer
     if (m_spritesToRender < MAX_SPRITES) {
         SpriteTransform& transform = m_spriteTransforms[m_spritesToRender];
@@ -1184,7 +1206,16 @@ void VulkanRenderer::renderSprite(float x, float y, float width, float height) {
         transform.y = y;
         transform.width = width;
         transform.height = height;
-        
+        transform.r = r;
+        transform.g = g;
+        transform.b = b;
+        transform.a = a;
+        transform.u0 = u0;
+        transform.v0 = v0;
+        transform.uScale = u1 - u0;
+        transform.vScale = v1 - v0;
+        transform.textureIndex = m_currentTextureIndex;
+
         // Increment sprite counter
         m_spritesToRender++;
     } else {
@@ -1263,6 +1294,88 @@ int VulkanRenderer::loadTexture(const std::string& path) {
         createTextureDescriptorSets();
     }
     
+    return static_cast<int>(m_textures.size() - 1);
+}
+
+int VulkanRenderer::loadTextureFromMemory(const uint8_t* pixels, int width, int height, int channels) {
+    if (!pixels || width <= 0 || height <= 0) {
+        std::cerr << "Invalid in-memory texture data" << std::endl;
+        return -1;
+    }
+
+    const int texChannels = 4; // Always store as RGBA
+    const VkDeviceSize imageSize = static_cast<VkDeviceSize>(width * height * texChannels);
+
+    // Convert incoming data to RGBA if necessary
+    std::vector<uint8_t> rgbaBuffer;
+    const uint8_t* srcPixels = pixels;
+    if (channels != 4) {
+        rgbaBuffer.resize(width * height * 4);
+        for (int i = 0; i < width * height; ++i) {
+            for (int c = 0; c < 4; ++c) {
+                if (c < channels) {
+                    rgbaBuffer[i * 4 + c] = pixels[i * channels + c];
+                } else if (c == 3) {
+                    rgbaBuffer[i * 4 + c] = (channels == 1 || channels == 3) ? 255 : 0;
+                } else {
+                    rgbaBuffer[i * 4 + c] = 0;
+                }
+            }
+        }
+        srcPixels = rgbaBuffer.data();
+    }
+
+    // Create a staging buffer for the pixel data
+    VkBuffer stagingBuffer;
+    VkDeviceMemory stagingBufferMemory;
+    createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                 stagingBuffer, stagingBufferMemory);
+
+    // Copy pixel data to the staging buffer
+    void* data;
+    vkMapMemory(m_device, stagingBufferMemory, 0, imageSize, 0, &data);
+    memcpy(data, srcPixels, static_cast<size_t>(imageSize));
+    vkUnmapMemory(m_device, stagingBufferMemory);
+
+    // Create a new texture entry
+    Texture newTexture{};
+    newTexture.width = width;
+    newTexture.height = height;
+
+    // Create a Vulkan image for the texture
+    createImage(static_cast<uint32_t>(width), static_cast<uint32_t>(height), VK_FORMAT_R8G8B8A8_SRGB,
+                VK_IMAGE_TILING_OPTIMAL,
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, newTexture.image, newTexture.memory);
+
+    // Transition image layout to VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    transitionImageLayout(newTexture.image, VK_FORMAT_R8G8B8A8_SRGB,
+                         VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+
+    // Copy pixel data from staging buffer to texture image
+    copyBufferToImage(stagingBuffer, newTexture.image,
+                     static_cast<uint32_t>(width), static_cast<uint32_t>(height));
+
+    // Transition image layout to VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    transitionImageLayout(newTexture.image, VK_FORMAT_R8G8B8A8_SRGB,
+                         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+    // Create image view for the texture
+    newTexture.view = createImageView(newTexture.image, VK_FORMAT_R8G8B8A8_SRGB);
+
+    // Free staging buffer
+    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
+    vkFreeMemory(m_device, stagingBufferMemory, nullptr);
+
+    // Add the texture to our collection and return its index
+    m_textures.push_back(newTexture);
+
+    // Update descriptor sets for the new texture if they have been allocated already
+    if (!m_descriptorSets.empty()) {
+        createTextureDescriptorSets();
+    }
+
     return static_cast<int>(m_textures.size() - 1);
 }
 
@@ -1961,11 +2074,11 @@ bool VulkanRenderer::createGraphicsPipeline() {
     // Pipeline layout
     std::cout << "Creating pipeline layout..." << std::endl;
     
-    // Push constant range for per-sprite transform (x, y, width, height)
+    // Push constant range for per-sprite transform (x, y, width, height, color, uv)
     VkPushConstantRange pushConstantRange{};
-    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+    pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
     pushConstantRange.offset = 0;
-    pushConstantRange.size = sizeof(float) * 4; // x, y, width, height
+    pushConstantRange.size = sizeof(float) * 12; // x, y, w, h, r, g, b, a, u0, v0, uScale, vScale
     
     VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
     pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;

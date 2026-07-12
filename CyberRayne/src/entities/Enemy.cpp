@@ -31,7 +31,7 @@ void Enemy::initializeStats() {
 void Enemy::takeDamage(int damage) {
     int actualDamage = std::max(0, damage - m_defense);
     m_health -= actualDamage;
-    
+
     if (m_health <= 0) {
         m_health = 0;
         std::cout << m_name << " has been defeated!" << std::endl;
@@ -39,6 +39,14 @@ void Enemy::takeDamage(int damage) {
         std::cout << m_name << " takes " << actualDamage << " damage. "
                   << "Health: " << m_health << "/" << m_maxHealth << std::endl;
     }
+}
+
+void Enemy::heal(int amount) {
+    m_health += amount;
+    if (m_health > m_maxHealth) {
+        m_health = m_maxHealth;
+    }
+    std::cout << m_name << " healed for " << amount << " HP. HP: " << m_health << "/" << m_maxHealth << std::endl;
 }
 
 int Enemy::calculateDamage() const {

@@ -1,155 +1,227 @@
 #include "../../include/UIManager.h"
 #include "../../include/VulkanRenderer.h"
+#include "../../include/Party.h"
 #include "../../include/Player.h"
 #include "../../include/Enemy.h"
+#include "../../include/Combatant.h"
+#include "../../include/ui/UIPanel.h"
 #include <iostream>
-#include <filesystem>
+#include <sstream>
 
-UIManager::UIManager() 
+namespace {
+
+std::string buildHpLabel(const std::string& name, int current, int max) {
+    std::ostringstream oss;
+    oss << name << " " << current << "/" << max;
+    return oss.str();
+}
+
+} // namespace
+
+UIManager::UIManager()
     : m_battleState(BattleMenuState::MAIN_MENU),
       m_selectedAction(BattleAction::NONE),
       m_actionSelected(false),
       m_menuIndex(0),
       m_selectedTargetIndex(0),
       m_selectedSpellIndex(0),
-      m_cursorTextureIndex(-1),
-      m_backgroundTextureIndex(-1) {
-    for(int i=0; i<4; ++i) m_buttonTextureIndices[i] = -1;
+      m_textRenderer(std::make_unique<TextRenderer>()),
+      m_currentActor(nullptr) {
 }
 
-UIManager::~UIManager() {}
+UIManager::~UIManager() = default;
 
 void UIManager::initialize(VulkanRenderer* renderer) {
-    loadTextures(renderer);
+    if (renderer) {
+        m_textRenderer->initialize(renderer);
+        rebuildBattleMenu(renderer);
+    }
 }
 
 void UIManager::loadTextures(VulkanRenderer* renderer) {
-    const std::string base = renderer->getAssetsBasePath();
-    auto exists = [](const std::string& p){ return std::filesystem::exists(p); };
+    if (renderer) {
+        m_textRenderer->initialize(renderer);
+    }
+}
 
-    // Reuse menu assets for now
-    std::string bgPath = base + "/ui/menu_background.png";
-    if (exists(bgPath)) m_backgroundTextureIndex = renderer->loadTexture(bgPath);
+void UIManager::rebuildBattleMenu(VulkanRenderer* renderer) {
+    if (!renderer) {
+        return;
+    }
 
-    std::string cursorPath = base + "/ui/cursor.png";
-    if (exists(cursorPath)) m_cursorTextureIndex = renderer->loadTexture(cursorPath);
+    int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
+    int startY = screenH - BUTTON_HEIGHT * 2 - MENU_START_Y_OFFSET;
+    const int gap = 20;
 
-    // Load buttons (Attack, Magic, Item, Defend/Flee)
-    // For prototype, reusing Start/Load/Settings/Quit as placeholders if specific ones don't exist
-    // Ideally we generate specific battle buttons later
-    std::string btnPaths[4] = {
-        base + "/ui/start.png",   // Placeholder for Attack
-        base + "/ui/loadgame.png", // Placeholder for Magic
-        base + "/ui/settings.png", // Placeholder for Item
-        base + "/ui/quit.png"      // Placeholder for Defend/Flee
+    const char* labels[] = {"Attack", "Magic", "Item", "Defend"};
+    const BattleAction actions[] = {
+        BattleAction::ATTACK,
+        BattleAction::MAGIC,
+        BattleAction::ITEM,
+        BattleAction::DEFEND
     };
 
-    for(int i=0; i<4; ++i) {
-        if (exists(btnPaths[i])) {
-            m_buttonTextureIndices[i] = renderer->loadTexture(btnPaths[i]);
+    m_battleRoot.clear();
+    m_battleButtons.clear();
+
+    for (int i = 0; i < 4; ++i) {
+        int bx = MENU_START_X + (i % 2) * (BUTTON_WIDTH + gap);
+        int by = startY + (i / 2) * (BUTTON_HEIGHT + gap);
+        auto button = std::make_unique<UIButton>(bx, by, BUTTON_WIDTH, BUTTON_HEIGHT, labels[i]);
+        button->setColor(0xCC333333);
+        button->setSelectedColor(0xFF6666FF);
+        button->setLabelColor(0xFFFFFFFF);
+        button->setLabelScale(2);
+
+        BattleAction action = actions[i];
+        button->setOnConfirm([this, action]() {
+            m_selectedAction = action;
+            m_actionSelected = true;
+        });
+
+        m_battleButtons.push_back(button.get());
+        m_battleRoot.addWidget(std::move(button));
+    }
+
+    updateButtonSelection();
+}
+
+void UIManager::updateButtonSelection() {
+    for (std::size_t i = 0; i < m_battleButtons.size(); ++i) {
+        if (m_battleButtons[i]) {
+            m_battleButtons[i]->setSelected(static_cast<int>(i) == m_menuIndex);
         }
     }
 }
 
-void UIManager::renderBattleUI(VulkanRenderer* renderer, Player* player, const std::vector<std::unique_ptr<Enemy>>& enemies) {
-    // Render background (if we want a UI overlay background, otherwise battle scene is behind)
-    // For now, let's assume the battle scene is rendered by BattleSystem/World, 
-    // and we just render the UI on top.
-    
+void UIManager::renderBattleUI(VulkanRenderer* renderer, Party* party, const std::vector<Combatant*>& enemies) {
+    if (!renderer) {
+        return;
+    }
+
+    // Rebuild the menu on the first frame if the screen size is known.
+    if (m_battleButtons.empty()) {
+        rebuildBattleMenu(renderer);
+    }
+
     if (m_battleState != BattleMenuState::WAITING) {
         renderBattleMenu(renderer);
-        renderCursor(renderer);
     }
-    
-    renderStats(renderer, player, enemies);
+
+    renderStats(renderer, party, enemies);
 }
 
 void UIManager::renderBattleMenu(VulkanRenderer* renderer) {
-    int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
-    int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
-    
-    int startX = 50;
-    int startY = screenH - BUTTON_HEIGHT * 2 - 50;
-    
-    // Render 4 main action buttons
-    const char* labels[] = {"Attack", "Magic", "Item", "Defend"};
-    
-    for(int i=0; i<4; ++i) {
-        int x = startX + (i % 2) * (BUTTON_WIDTH + 20);
-        int y = startY + (i / 2) * (BUTTON_HEIGHT + 20);
-        
-        if (m_buttonTextureIndices[i] >= 0) {
-            renderer->renderSpritePixelsWithTexture(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, m_buttonTextureIndices[i]);
-        } else {
-            // Fallback colored rect
-            // renderer->renderSpritePixels(x, y, BUTTON_WIDTH, BUTTON_HEIGHT, 0.2f, 0.2f, 0.8f, 1.0f);
-        }
-    }
+    m_battleRoot.render(renderer, m_textRenderer.get());
 }
 
-void UIManager::renderCursor(VulkanRenderer* renderer) {
-    if (m_cursorTextureIndex < 0) return;
-    
+void UIManager::renderStats(VulkanRenderer* renderer, Party* party, const std::vector<Combatant*>& enemies) {
+    if (!renderer || !party) {
+        return;
+    }
+
     int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
     int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
-    int startX = 50;
-    int startY = screenH - BUTTON_HEIGHT * 2 - 50;
-    
-    int targetX = 0, targetY = 0;
-    
-    if (m_battleState == BattleMenuState::MAIN_MENU) {
-        targetX = startX + (m_menuIndex % 2) * (BUTTON_WIDTH + 20);
-        targetY = startY + (m_menuIndex / 2) * (BUTTON_HEIGHT + 20);
-    }
-    
-    // Offset cursor to left of target
-    int cursorSize = 64;
-    renderer->renderSpritePixelsWithTexture(targetX - cursorSize + 10, targetY + (BUTTON_HEIGHT - cursorSize)/2, cursorSize, cursorSize, m_cursorTextureIndex);
-}
 
-void UIManager::renderStats(VulkanRenderer* renderer, Player* player, const std::vector<std::unique_ptr<Enemy>>& enemies) {
-    // Placeholder for text rendering (since we don't have font rendering yet)
-    // We could render health bars here using colored quads
-    
-    int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
-    
-    // Player HP Bar (Bottom Right)
-    float playerHpPct = static_cast<float>(player->getHealth()) / player->getMaxHealth();
-    int barW = 300;
-    int barH = 30;
+    // Turn indicator at the top center
+    std::string turnText = "Battle";
+    if (m_currentActor) {
+        turnText = m_currentActor->getName() + "'s turn";
+    }
+    if (!m_turnLabel) {
+        m_turnLabel = std::make_unique<UILabel>(0, 8, turnText, 2);
+    } else {
+        m_turnLabel->setText(turnText);
+    }
+    int titleW = m_textRenderer->measureText(turnText, 2);
+    m_turnLabel->setPosition((screenW - titleW) / 2, 8);
+    m_turnLabel->render(renderer, m_textRenderer.get());
+
+    // Party HP/MP/ATB bars on the bottom-right
+    int barW = 320;
+    int barH = 28;
     int barX = screenW - barW - 50;
-    int barY = static_cast<int>(renderer->getSwapchainExtent().height) - 100;
-    
-    // Background
-    // renderer->renderSpritePixels(barX, barY, barW, barH, 0.2f, 0.0f, 0.0f, 1.0f);
-    // Foreground
-    // renderer->renderSpritePixels(barX, barY, static_cast<int>(barW * playerHpPct), barH, 0.0f, 0.8f, 0.0f, 1.0f);
+    int startBarY = screenH - 130;
+    int barGap = 70;
+
+    const auto& members = party->getMembers();
+    for (std::size_t i = 0; i < members.size(); ++i) {
+        const Combatant* member = members[i].get();
+        if (!member || !member->isAlive()) {
+            continue;
+        }
+        int barY = startBarY - static_cast<int>(i) * barGap;
+
+        UIProgressBar hpBar(barX, barY, barW, barH);
+        hpBar.setValue(static_cast<float>(member->getHealth()) / member->getMaxHealth());
+        hpBar.setFillColor(0xFF00CC00);
+        hpBar.setLabel(buildHpLabel(member->getName(), member->getHealth(), member->getMaxHealth()));
+        hpBar.render(renderer, m_textRenderer.get());
+
+        UIProgressBar atbBar(barX, barY + barH + 4, barW, 8);
+        atbBar.setValue(member->getAtbGauge());
+        atbBar.setFillColor(0xFFFFFF00);
+        atbBar.setLabel("");
+        atbBar.render(renderer, m_textRenderer.get());
+    }
+
+    // Enemy HP bars stacked in the top-right
+    int enemyBarW = 260;
+    int enemyBarH = 24;
+    int enemyX = screenW - enemyBarW - 30;
+    int enemyY = 40;
+    int enemyGap = 36;
+
+    for (std::size_t i = 0; i < enemies.size(); ++i) {
+        const Combatant* enemy = enemies[i];
+        if (!enemy || !enemy->isAlive()) {
+            continue;
+        }
+        float enemyHpPct = static_cast<float>(enemy->getHealth()) / enemy->getMaxHealth();
+        UIProgressBar bar(enemyX, enemyY + static_cast<int>(i) * enemyGap, enemyBarW, enemyBarH);
+        bar.setValue(enemyHpPct);
+        bar.setFillColor(0xFFCC0000);
+        bar.setLabel(buildHpLabel(enemy->getName(), enemy->getHealth(), enemy->getMaxHealth()));
+        bar.render(renderer, m_textRenderer.get());
+    }
 }
 
-void UIManager::handleInput(int key) {
+void UIManager::handleInput(InputAction action) {
+    // Only accept battle menu input when a player character is currently acting.
+    if (!m_currentActor || !m_currentActor->isPlayer()) {
+        return;
+    }
+
     if (m_battleState == BattleMenuState::MAIN_MENU) {
-        switch(key) {
-            case 0: // Up
-                if (m_menuIndex >= 2) m_menuIndex -= 2;
-                break;
-            case 1: // Down
-                if (m_menuIndex <= 1) m_menuIndex += 2;
-                break;
-            case 3: // Left
-                if (m_menuIndex % 2 == 1) m_menuIndex -= 1;
-                break;
-            case 4: // Right
-                if (m_menuIndex % 2 == 0) m_menuIndex += 1;
-                break;
-            case 2: // Enter
-                if (m_menuIndex == 0) { // Attack
-                    m_selectedAction = BattleAction::ATTACK;
-                    m_actionSelected = true;
-                } else if (m_menuIndex == 3) { // Defend (mapped to 4th button)
-                     m_selectedAction = BattleAction::DEFEND;
-                     m_actionSelected = true;
+        switch (action) {
+            case InputAction::MOVE_UP:
+                if (m_menuIndex >= 2) {
+                    m_menuIndex -= 2;
+                    updateButtonSelection();
                 }
-                // TODO: Magic/Item submenus
+                break;
+            case InputAction::MOVE_DOWN:
+                if (m_menuIndex <= 1) {
+                    m_menuIndex += 2;
+                    updateButtonSelection();
+                }
+                break;
+            case InputAction::MOVE_LEFT:
+                if (m_menuIndex % 2 == 1) {
+                    m_menuIndex -= 1;
+                    updateButtonSelection();
+                }
+                break;
+            case InputAction::MOVE_RIGHT:
+                if (m_menuIndex % 2 == 0) {
+                    m_menuIndex += 1;
+                    updateButtonSelection();
+                }
+                break;
+            case InputAction::CONFIRM:
+                if (m_menuIndex >= 0 && m_menuIndex < static_cast<int>(m_battleButtons.size())) {
+                    m_battleButtons[m_menuIndex]->handleInput(InputAction::CONFIRM);
+                }
                 break;
         }
     }

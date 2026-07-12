@@ -2,6 +2,12 @@
 
 #include <vector>
 #include <string>
+#include <memory>
+#include "InputAction.h"
+#include "ui/UIButton.h"
+#include "ui/UILabel.h"
+#include "ui/UIRoot.h"
+#include "ui/TextRenderer.h"
 
 class VulkanRenderer;
 
@@ -21,7 +27,7 @@ public:
     void loadTextures(VulkanRenderer* renderer);
     void update(float deltaTime);
     void render(VulkanRenderer* renderer);
-    void handleInput(int key);
+    void handleInput(InputAction action);
 
     // Getters
     MenuItem getSelectedOption() const { return m_selectedOption; }
@@ -31,25 +37,21 @@ public:
 private:
     void renderMenuBackground(VulkanRenderer* renderer);
     void renderMenuOptions(VulkanRenderer* renderer);
-    
+    void buildMenuButtons(VulkanRenderer* renderer);
+    void updateSelection();
+    void onConfirmOption(int index);
+
     std::vector<std::string> m_menuOptions;
     MenuItem m_selectedOption;
     bool m_optionSelected;
     int m_highlightedIndex;
-    
-    // Texture indices for menu button images
+
+    // Decorative images (kept for visual style)
     int m_backgroundTextureIndex;
     int m_nameBannerTextureIndex;
-    int m_startButtonTextureIndex;
-    int m_loadButtonTextureIndex;
-    int m_settingsButtonTextureIndex;
-    int m_quitButtonTextureIndex;
-    int m_cursorTextureIndex;
-    int m_highlightTextureIndex;
-    
-    // Positioning constants for menu rendering
-    static constexpr float MENU_START_X = -0.8f;
-    static constexpr float MENU_START_Y = 0.6f;
-    static constexpr float MENU_OPTION_SPACING = 0.2f;
-    static constexpr float HIGHLIGHT_OFFSET_X = -0.1f;
+
+    // Reusable UI primitives
+    std::unique_ptr<TextRenderer> m_textRenderer;
+    UIRoot m_menuRoot;
+    std::vector<UIButton*> m_menuButtons;
 };

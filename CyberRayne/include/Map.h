@@ -33,6 +33,7 @@ public:
     // Entity management
     void addEnemy(std::unique_ptr<Enemy> enemy);
     void removeEnemy(Enemy* enemy);
+    void clearEnemies();
     const std::vector<std::unique_ptr<Enemy>>& getEnemies() const { return m_enemies; }
 
     void addNPC(std::unique_ptr<NPC> npc);

@@ -44,6 +44,9 @@ add_executable(CyberRayne
     src/entities/Item.cpp
     src/entities/Spell.cpp
     src/entities/NPC.cpp
+    src/entities/Combatant.cpp
+    src/entities/Party.cpp
+    src/entities/StatusEffect.cpp
     src/core/Map.cpp
     src/core/Tile.cpp
     src/core/World.cpp
@@ -52,73 +55,71 @@ add_executable(CyberRayne
     src/systems/UIManager.cpp
     src/graphics/VulkanRenderer.cpp
     src/ui/MenuSystem.cpp
+    src/ui/BitmapFont.cpp
+    src/ui/TextRenderer.cpp
+    src/ui/UIWidget.cpp
+    src/ui/UILabel.cpp
+    src/ui/UIButton.cpp
+    src/ui/UIPanel.cpp
+    src/ui/UIProgressBar.cpp
+    src/ui/UIRoot.cpp
 )
 
-# Add test executable
-set(TEST_SOURCES
-    src/tests/CharacterSelectionTest.cpp
-    src/systems/CharacterSelectionSystem.cpp
+# Add test executables
+include(CTest)
+
+set(GAMEPLAY_TEST_SUPPORT_SOURCES
     src/entities/Player.cpp
     src/entities/Enemy.cpp
-    src/entities/EnemyTypes.cpp
     src/entities/Item.cpp
     src/entities/Spell.cpp
     src/entities/NPC.cpp
+    src/entities/Combatant.cpp
+    src/entities/Party.cpp
+    src/entities/StatusEffect.cpp
     src/core/Map.cpp
     src/core/Tile.cpp
 )
 
-# Add battle system test executable
-set(BATTLE_TEST_SOURCES
+add_executable(CharacterSelectionTest
+    src/tests/CharacterSelectionTest.cpp
+    src/systems/CharacterSelectionSystem.cpp
+    src/entities/EnemyTypes.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+add_executable(BattleSystemTest
     src/tests/BattleSystemTest.cpp
     src/systems/BattleSystem.cpp
-    src/systems/UIManager.cpp
-    src/entities/Player.cpp
-    src/entities/Enemy.cpp
-    src/entities/EnemyTypes.cpp
-    src/entities/Item.cpp
-    src/entities/Spell.cpp
-    src/graphics/VulkanRenderer.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
 )
-
-# Add enemy types test executable
-set(ENEMY_TEST_SOURCES
+add_executable(EnemyTypesTest
     src/tests/EnemyTypesTest.cpp
     src/entities/Enemy.cpp
     src/entities/EnemyTypes.cpp
+    src/entities/Combatant.cpp
+    src/entities/StatusEffect.cpp
 )
 
-add_executable(CharacterSelectionTest ${TEST_SOURCES})
-add_executable(EnemyTypesTest ${ENEMY_TEST_SOURCES})
+add_executable(BitmapFontTest
+    src/tests/BitmapFontTest.cpp
+    src/ui/BitmapFont.cpp
+)
+
+foreach(test_target CharacterSelectionTest BattleSystemTest EnemyTypesTest BitmapFontTest)
+    target_include_directories(${test_target} PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party
+    )
+    target_compile_definitions(${test_target} PRIVATE NO_VULKAN)
+    add_test(NAME ${test_target} COMMAND ${test_target})
+endforeach()
+
 if(WIN32)
-    add_executable(BattleSystemTest ${BATTLE_TEST_SOURCES})
     add_executable(VulkanTest src/tests/VulkanTest.cpp)
     target_link_libraries(VulkanTest ${Vulkan_LIBRARIES})
     target_include_directories(VulkanTest PRIVATE
         ${Vulkan_INCLUDE_DIRS}
     )
-endif()
-
-target_include_directories(CharacterSelectionTest PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party
-)
-
-# Exclude Vulkan dependencies for the test
-target_compile_definitions(CharacterSelectionTest PRIVATE -DNO_VULKAN)
-
-if(WIN32)
-    # Battle system test
-    target_include_directories(BattleSystemTest PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/include
-        ${CMAKE_CURRENT_SOURCE_DIR}/third_party
-        ${Vulkan_INCLUDE_DIRS}
-    )
-
-    # Exclude Vulkan dependencies for the battle system test
-    # Exclude Vulkan dependencies for the battle system test
-    # target_compile_definitions(BattleSystemTest PRIVATE -DNO_VULKAN)
-    target_link_libraries(BattleSystemTest ${Vulkan_LIBRARIES})
 endif()
 
 # Include directories
@@ -149,6 +150,18 @@ set(HEADERS
     include/Item.h
     include/CharacterSelectionSystem.h
     include/MenuSystem.h
+    include/Combatant.h
+    include/Party.h
+    include/StatusEffect.h
+    include/ui/BitmapFont.h
+    include/ui/BitmapFontData.h
+    include/ui/TextRenderer.h
+    include/ui/UIWidget.h
+    include/ui/UILabel.h
+    include/ui/UIButton.h
+    include/ui/UIPanel.h
+    include/ui/UIProgressBar.h
+    include/ui/UIRoot.h
 )
 
 if(WIN32)

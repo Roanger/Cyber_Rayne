@@ -157,23 +157,25 @@ void Player::heal(int amount) {
     std::cout << m_name << " healed for " << amount << " HP. HP: " << m_health << "/" << m_maxHealth << std::endl;
 }
 
-void Player::addItem(Item* item) {
-    m_inventory.push_back(item);
+void Player::addItem(std::unique_ptr<Item> item) {
     std::cout << m_name << " picked up " << item->getName() << std::endl;
+    m_inventory.push_back(std::move(item));
 }
 
-void Player::removeItem(Item* item) {
-    auto it = std::find(m_inventory.begin(), m_inventory.end(), item);
+void Player::removeItem(const Item* item) {
+    auto it = std::find_if(m_inventory.begin(), m_inventory.end(), [item](const auto& entry) {
+        return entry.get() == item;
+    });
     if (it != m_inventory.end()) {
+        std::cout << m_name << " removed " << (*it)->getName() << " from inventory" << std::endl;
         m_inventory.erase(it);
-        std::cout << m_name << " removed " << item->getName() << " from inventory" << std::endl;
     }
 }
 
-void Player::addSpell(Spell* spell) {
+void Player::addSpell(std::shared_ptr<Spell> spell) {
     if (m_characterClass == CharacterClass::MAGE) {
-        m_spells.push_back(spell);
         std::cout << m_name << " learned spell: " << spell->getName() << std::endl;
+        m_spells.push_back(std::move(spell));
     } else {
         std::cout << m_name << " cannot learn spells!" << std::endl;
     }

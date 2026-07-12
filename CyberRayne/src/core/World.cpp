@@ -309,6 +309,7 @@ void World::spawnEnemies() {
     if (m_currentMap) {
         // Clear existing enemies
         // In a real implementation, we might want to be more selective about this
+        m_currentMap->clearEnemies();
         
         // Spawn new enemies based on the current biome
         spawnEnemiesForBiome(m_currentBiome, m_currentMap);

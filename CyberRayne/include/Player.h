@@ -4,6 +4,8 @@
 #include <vector>
 #include <memory>
 
+#include "Combatant.h"
+
 #ifndef NO_VULKAN
 class VulkanRenderer;
 #endif
@@ -11,7 +13,7 @@ class VulkanRenderer;
 class Item;
 class Spell;
 
-class Player {
+class Player : public Combatant {
 public:
     enum class CharacterClass {
         MAGE,
@@ -36,18 +38,22 @@ public:
     void render();
 #endif
 
-    // Getters
-    const std::string& getName() const { return m_name; }
-    int getLevel() const { return m_level; }
-    int getHealth() const { return m_health; }
-    int getMana() const { return m_mana; }
+    // Combatant interface
+    const std::string& getName() const override { return m_name; }
+    Allegiance getAllegiance() const override { return Allegiance::PLAYER; }
+    int getLevel() const override { return m_level; }
+    int getHealth() const override { return m_health; }
+    int getMaxHealth() const override { return m_maxHealth; }
+    int getMana() const override { return m_mana; }
+    int getMaxMana() const override { return m_maxMana; }
+    int getStrength() const override { return m_strength; }
+    int getMagic() const override { return m_magic; }
+    int getSpeed() const override { return m_speed; }
+    int getDefense() const override { return m_defense; }
+    bool isAlive() const override { return m_health > 0; }
+
+    // Player-specific getters
     CharacterClass getCharacterClass() const { return m_characterClass; }
-    int getStrength() const { return m_strength; }
-    int getMagic() const { return m_magic; }
-    int getSpeed() const { return m_speed; }
-    int getDefense() const { return m_defense; }
-    int getMaxHealth() const { return m_maxHealth; }
-    int getMaxMana() const { return m_maxMana; }
     float getX() const { return m_x; }
     float getY() const { return m_y; }
     int getTextureIndex() const { return m_textureIndex; }
@@ -55,8 +61,8 @@ public:
     // Setters
     void setName(const std::string& name) { m_name = name; }
     void setLevel(int level) { m_level = level; }
-    void setHealth(int health) { m_health = health; }
-    void setMana(int mana) { m_mana = mana; }
+    void setHealth(int health) override { m_health = health; }
+    void setMana(int mana) override { m_mana = mana; }
     void setPosition(float x, float y) { m_x = x; m_y = y; }
     
     // Movement
@@ -67,18 +73,17 @@ public:
     void moveRight(class Map* map);
 
     // Combat functions
-    void takeDamage(int damage);
-    bool isAlive() const { return m_health > 0; }
-    void heal(int amount);
+    void takeDamage(int damage) override;
+    void heal(int amount) override;
 
     // Inventory management
-    void addItem(Item* item);
-    void removeItem(Item* item);
-    const std::vector<Item*>& getInventory() const { return m_inventory; }
+    void addItem(std::unique_ptr<Item> item);
+    void removeItem(const Item* item);
+    const std::vector<std::unique_ptr<Item>>& getInventory() const { return m_inventory; }
 
     // Spell management (for Mage)
-    void addSpell(Spell* spell);
-    const std::vector<Spell*>& getSpells() const { return m_spells; }
+    void addSpell(std::shared_ptr<Spell> spell);
+    const std::vector<std::shared_ptr<Spell>>& getSpells() const { return m_spells; }
 
     // Character class specific abilities
     bool canCastSpells() const;
@@ -117,6 +122,6 @@ private:
     
     int m_textureIndex;
 
-    std::vector<Item*> m_inventory;
-    std::vector<Spell*> m_spells;
+    std::vector<std::unique_ptr<Item>> m_inventory;
+    std::vector<std::shared_ptr<Spell>> m_spells;
 };

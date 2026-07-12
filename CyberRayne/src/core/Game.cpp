@@ -1,6 +1,8 @@
 #include "../../include/Game.h"
 #include "../../include/GameState.h"
 #include "../../include/VulkanRenderer.h"
+#include "../../include/InputAction.h"
+#include <array>
 #include <iostream>
 #ifdef _WIN32
  #include <Windows.h>
@@ -71,53 +73,43 @@ void Game::run() {
         float deltaTime = std::chrono::duration<float>(currentTime - lastTime).count();
         lastTime = currentTime;
 
-        // Log frame rate every 60 frames to avoid spam
-        static int frameCount = 0;
-        frameCount++;
-        if (frameCount % 60 == 0) {
-            std::cout << "[DEBUG] Frame " << frameCount << " - DeltaTime: " << deltaTime << "s (FPS: " << (1.0f / deltaTime) << ")" << std::endl;
-        }
-        
         // Handle input
         if (m_gameState) {
+            static std::array<bool, 8> previousKeyStates{};
+            const std::array<InputAction, 8> actions = {
+                InputAction::MOVE_UP,
+                InputAction::MOVE_DOWN,
+                InputAction::CONFIRM,
+                InputAction::MOVE_LEFT,
+                InputAction::MOVE_RIGHT,
+                InputAction::CANCEL,
+                InputAction::OPEN_MENU,
+                InputAction::PAUSE
+            };
 #ifdef _WIN32
-            if (GetAsyncKeyState(VK_UP) & 0x8000) {
-                m_gameState->handleInput(0);
-            }
-            if (GetAsyncKeyState(VK_DOWN) & 0x8000) {
-                m_gameState->handleInput(1);
-            }
-            if (GetAsyncKeyState(VK_RETURN) & 0x8000) {
-                std::cout << "[DEBUG] Enter key pressed - handling input 2" << std::endl;
-                m_gameState->handleInput(2);
-            }
-            if (GetAsyncKeyState(VK_LEFT) & 0x8000) {
-                m_gameState->handleInput(3);
-            }
-            if (GetAsyncKeyState(VK_RIGHT) & 0x8000) {
-                m_gameState->handleInput(4);
-            }
+            const std::array<int, 8> keys = {VK_UP, VK_DOWN, VK_RETURN, VK_LEFT, VK_RIGHT, VK_ESCAPE, 'M', 'P'};
+            auto isPressed = [](int key) { return (GetAsyncKeyState(key) & 0x8000) != 0; };
 #else
             GLFWwindow* window = m_renderer ? m_renderer->getWindow() : nullptr;
-            if (window) {
-                if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS) {
-                    m_gameState->handleInput(0);
-                }
-                if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS) {
-                    m_gameState->handleInput(1);
-                }
-                if (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
-                    std::cout << "[DEBUG] Enter key pressed - handling input 2" << std::endl;
-                    m_gameState->handleInput(2);
-                }
-                if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS) {
-                    m_gameState->handleInput(3);
-                }
-                if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS) {
-                    m_gameState->handleInput(4);
-                }
-            }
+            const std::array<int, 8> keys = {
+                GLFW_KEY_UP,
+                GLFW_KEY_DOWN,
+                GLFW_KEY_ENTER,
+                GLFW_KEY_LEFT,
+                GLFW_KEY_RIGHT,
+                GLFW_KEY_ESCAPE,
+                GLFW_KEY_M,
+                GLFW_KEY_P
+            };
+            auto isPressed = [window](int key) { return window && glfwGetKey(window, key) == GLFW_PRESS; };
 #endif
+            for (size_t i = 0; i < actions.size(); ++i) {
+                const bool pressed = isPressed(keys[i]);
+                if (pressed && !previousKeyStates[i]) {
+                    m_gameState->handleInput(actions[i]);
+                }
+                previousKeyStates[i] = pressed;
+            }
         }
 
         // Update game state

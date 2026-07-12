@@ -74,6 +74,14 @@ struct SpriteTransform {
     float y;
     float width;
     float height;
+    float r;
+    float g;
+    float b;
+    float a;
+    float u0;
+    float v0;
+    float uScale;
+    float vScale;
     int textureIndex;
 };
 
@@ -92,15 +100,27 @@ public:
     void cleanup();
     void render();
     bool isRunning() const { return m_running; }
-    void renderSprite(float x, float y, float width, float height);
-    
+    void renderSprite(float x, float y, float width, float height,
+                      float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f,
+                      float u0 = 0.0f, float v0 = 0.0f, float u1 = 1.0f, float v1 = 1.0f);
+
     // New methods for texture management
     void createDefaultTexture();
     int loadTexture(const std::string& path);
+    int loadTextureFromMemory(const uint8_t* pixels, int width, int height, int channels);
     void setCurrentTexture(int textureIndex);
-    void renderSpriteWithTexture(float x, float y, float width, float height, int textureIndex);
+    void renderSpriteWithTexture(float x, float y, float width, float height, int textureIndex,
+                                 float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f,
+                                 float u0 = 0.0f, float v0 = 0.0f, float u1 = 1.0f, float v1 = 1.0f);
     // Convenience: render using pixel coordinates (top-left in pixels)
-    void renderSpritePixelsWithTexture(int leftPx, int topPx, int widthPx, int heightPx, int textureIndex);
+    void renderSpritePixelsWithTexture(int leftPx, int topPx, int widthPx, int heightPx, int textureIndex,
+                                       float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f,
+                                       float u0 = 0.0f, float v0 = 0.0f, float u1 = 1.0f, float v1 = 1.0f);
+    // Convenience: render a solid colored rectangle using the white texture
+    void renderColoredRectPixels(int leftPx, int topPx, int widthPx, int heightPx,
+                                 float r, float g, float b, float a = 1.0f);
+    // Returns the index of the 1x1 white fallback texture
+    int getWhiteTextureIndex() const { return 0; }
     // Accessor for current swapchain extent (used for pixel -> NDC conversions)
     VkExtent2D getSwapchainExtent() const { return m_swapChainExtent; }
     // Accessor for assets base directory detected at init

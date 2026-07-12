@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include "Player.h"
+#include "InputAction.h"
 
 #ifndef NO_VULKAN
 class VulkanRenderer;
@@ -27,7 +28,7 @@ public:
     void loadTextures(VulkanRenderer* renderer);  // Load character textures
 #endif
     void update(float deltaTime);
-    void handleInput(int key);  // Handle keyboard input
+    void handleInput(InputAction action);  // Handle keyboard input
 #ifndef NO_VULKAN
     void render(VulkanRenderer* renderer);
 #else
@@ -38,7 +39,7 @@ public:
     const std::vector<CharacterOption>& getCharacterOptions() const;
     void selectCharacter(int index);
     void confirmSelection();  // Confirm current selection
-    Player* createSelectedCharacter() const;
+    std::unique_ptr<Player> createSelectedCharacter() const;
     
     // Getters
     bool isCharacterSelected() const { return m_characterSelected; }

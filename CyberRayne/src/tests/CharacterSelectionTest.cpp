@@ -1,38 +1,34 @@
-#include "../include/CharacterSelectionSystem.h"
-#include "../include/Player.h"
+#include "../../include/CharacterSelectionSystem.h"
+#include "../../include/Player.h"
 #include <iostream>
+#include <stdexcept>
+
+namespace {
+void expect(bool condition, const char* message) {
+    if (!condition) {
+        throw std::runtime_error(message);
+    }
+}
+}
 
 int main() {
-    std::cout << "Testing Character Selection System" << std::endl;
-    
-    CharacterSelectionSystem charSelect;
-    charSelect.initialize();
-    
-    const auto& options = charSelect.getCharacterOptions();
-    std::cout << "Available characters: " << options.size() << std::endl;
-    
-    for (size_t i = 0; i < options.size(); ++i) {
-        const auto& option = options[i];
-        std::cout << i << ". " << option.name << " - " << option.description << std::endl;
-        std::cout << "   Starter Quest: " << option.starterQuest << std::endl;
-    }
-    
-    // Test selecting a character
-    charSelect.selectCharacter(0);
-    Player* player = charSelect.createSelectedCharacter();
-    
-    if (player) {
-        std::cout << "Created player: " << player->getName() << std::endl;
-        std::cout << "Class: " << static_cast<int>(player->getCharacterClass()) << std::endl;
-        std::cout << "Stats - HP: " << player->getHealth() << "/" << player->getMaxHealth() 
-                  << ", MP: " << player->getMana() << "/" << player->getMaxMana() 
-                  << ", STR: " << player->getStrength() 
-                  << ", MAG: " << player->getMagic() 
-                  << ", SPD: " << player->getSpeed() 
-                  << ", DEF: " << player->getDefense() << std::endl;
-        
-        delete player;
-    }
-    
+    CharacterSelectionSystem characterSelection;
+    expect(characterSelection.initialize(), "character selection should initialize");
+
+    const auto& options = characterSelection.getCharacterOptions();
+    expect(options.size() == 3, "three character options should be available");
+    expect(options[0].charClass == Player::CharacterClass::MAGE, "first option should be mage");
+    expect(options[1].charClass == Player::CharacterClass::WARRIOR, "second option should be warrior");
+    expect(options[2].charClass == Player::CharacterClass::ROGUE, "third option should be rogue");
+
+    characterSelection.selectCharacter(1);
+    auto player = characterSelection.createSelectedCharacter();
+    expect(player != nullptr, "selected character should create a player");
+    expect(player->getName() == options[1].name, "player name should match the selection");
+    expect(player->getCharacterClass() == Player::CharacterClass::WARRIOR, "player class should match the selection");
+    expect(player->getHealth() == player->getMaxHealth(), "new player should have full health");
+    expect(player->getStrength() > player->getMagic(), "warrior strength should exceed magic");
+
+    std::cout << "CharacterSelectionTest passed" << std::endl;
     return 0;
 }

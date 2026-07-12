@@ -231,6 +231,10 @@ void Map::removeEnemy(Enemy* enemy) {
     }
 }
 
+void Map::clearEnemies() {
+    m_enemies.clear();
+}
+
 void Map::addNPC(std::unique_ptr<NPC> npc) {
     m_npcs.push_back(std::move(npc));
 }

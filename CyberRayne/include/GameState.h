@@ -2,9 +2,11 @@
 
 #include <memory>
 #include "Player.h"
+#include "Party.h"
 #include "CharacterSelectionSystem.h"
 #include "MenuSystem.h"
 #include "UIManager.h"
+#include "InputAction.h"
 
 class World;
 class Player;
@@ -12,6 +14,7 @@ class VulkanRenderer;
 class CharacterSelectionSystem;
 class BattleSystem;
 class UIManager;
+class Party;
 
 class GameState {
 public:
@@ -32,7 +35,7 @@ public:
     void setRenderer(VulkanRenderer* renderer);
     void update(float deltaTime);
     void render(VulkanRenderer* renderer);
-    void handleInput(int key);
+    void handleInput(InputAction action);
 
     // Getters
     State getCurrentState() const { return m_currentState; }
@@ -41,16 +44,17 @@ public:
     void setCurrentState(State state) { m_currentState = state; }
 
     // Getters for game components
-    World* getWorld() const { return m_world; }
-    Player* getPlayer() const { return m_player; }
+    World* getWorld() const { return m_world.get(); }
+    Party* getParty() const { return m_party.get(); }
+    Player* getPlayer() const { return m_party ? m_party->getLeader() : nullptr; }
 
 private:
     State m_currentState;
-    World* m_world;
-    Player* m_player;
-    CharacterSelectionSystem* m_charSelectionSystem;
-    BattleSystem* m_battleSystem;
-    MenuSystem* m_menuSystem;
-    UIManager* m_uiManager;
+    std::unique_ptr<World> m_world;
+    std::unique_ptr<Party> m_party;
+    std::unique_ptr<CharacterSelectionSystem> m_charSelectionSystem;
+    std::unique_ptr<BattleSystem> m_battleSystem;
+    std::unique_ptr<MenuSystem> m_menuSystem;
+    std::unique_ptr<UIManager> m_uiManager;
     VulkanRenderer* m_renderer;
 };
