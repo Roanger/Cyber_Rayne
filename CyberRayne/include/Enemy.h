@@ -6,7 +6,6 @@
 
 #include "Combatant.h"
 
-class Spell;
 
 class Enemy : public Combatant {
 public:
@@ -52,10 +51,6 @@ public:
     
     EnemyAction decideAction() const;
 
-    // Spell management
-    void addSpell(std::shared_ptr<Spell> spell);
-    const std::vector<std::shared_ptr<Spell>>& getSpells() const { return m_spells; }
-
 protected:
     virtual void initializeStats();
 
@@ -73,6 +68,4 @@ protected:
     int m_goldReward;
     float m_x;
     float m_y;
-
-    std::vector<std::shared_ptr<Spell>> m_spells;
 };

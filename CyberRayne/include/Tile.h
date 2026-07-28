@@ -13,7 +13,14 @@ public:
         TREE,
         WALL,
         DOOR,
-        FLOOR
+        FLOOR,
+        // Cyberpunk tile types
+        CONCRETE,
+        NEON,
+        METAL,
+        HOLOGRAM,
+        ROAD,
+        VENDING
     };
 
     Tile(TileType type, bool walkable = true);

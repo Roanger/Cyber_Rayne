@@ -51,17 +51,17 @@ void Party::resetAtb() {
 std::unique_ptr<Party> Party::createDefaultParty() {
     auto party = std::make_unique<Party>();
 
-    auto rayne = std::make_unique<Player>(Player::CharacterClass::WARRIOR, "Rayne");
+    auto rayne = std::make_unique<Player>(Player::CharacterClass::SOLO, "Rayne");
     rayne->setHealth(rayne->getMaxHealth());
     rayne->setMana(rayne->getMaxMana());
     party->addMember(std::move(rayne));
 
-    auto cyph = std::make_unique<Player>(Player::CharacterClass::MAGE, "Cyph");
+    auto cyph = std::make_unique<Player>(Player::CharacterClass::NETRUNNER, "Cyph");
     cyph->setHealth(cyph->getMaxHealth());
     cyph->setMana(cyph->getMaxMana());
     party->addMember(std::move(cyph));
 
-    auto vash = std::make_unique<Player>(Player::CharacterClass::ROGUE, "Vash");
+    auto vash = std::make_unique<Player>(Player::CharacterClass::INFILTRATOR, "Vash");
     vash->setHealth(vash->getMaxHealth());
     vash->setMana(vash->getMaxMana());
     party->addMember(std::move(vash));

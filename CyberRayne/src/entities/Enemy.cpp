@@ -1,5 +1,5 @@
 #include "../../include/Enemy.h"
-#include "../../include/Spell.h"
+#include "../../include/Ability.h"
 #include <iostream>
 #include <algorithm>
 #include <random>
@@ -29,7 +29,7 @@ void Enemy::initializeStats() {
 }
 
 void Enemy::takeDamage(int damage) {
-    int actualDamage = std::max(0, damage - m_defense);
+    int actualDamage = computeMitigatedDamage(damage, getEffectiveDefense());
     m_health -= actualDamage;
 
     if (m_health <= 0) {
@@ -57,13 +57,9 @@ int Enemy::calculateDamage() const {
 Enemy::EnemyAction Enemy::decideAction() const {
     // Simple AI decision making
     // In a real implementation, this would be more complex
-    if (!m_spells.empty() && m_mana >= 10 && (rand() % 100) < 30) {  // 30% chance to cast a spell
+    if (!m_abilities.empty() && m_mana >= 10 && (rand() % 100) < 30) {  // 30% chance to use an ability
         return EnemyAction::MAGIC;
     }
     return EnemyAction::ATTACK;
 }
 
-void Enemy::addSpell(std::shared_ptr<Spell> spell) {
-    m_spells.push_back(spell);
-    std::cout << m_name << " learned " << spell->getName() << std::endl;
-}

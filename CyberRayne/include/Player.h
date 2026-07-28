@@ -11,15 +11,27 @@ class VulkanRenderer;
 #endif
 
 class Item;
-class Spell;
 
 class Player : public Combatant {
 public:
+    // Ordinal order is part of the save format: SaveSystem persists this as a
+    // bare int. Renaming enumerators is safe; reordering or inserting silently
+    // reinterprets existing saves.
     enum class CharacterClass {
-        MAGE,
-        WARRIOR,
-        ROGUE
+        NETRUNNER,   // 0 — tech caster
+        SOLO,        // 1 — physical frontline
+        INFILTRATOR  // 2 — speed and attrition
     };
+
+    static constexpr int CHARACTER_CLASS_COUNT = 3;
+
+    // Human-readable class name, e.g. "Netrunner". Also the basis for asset
+    // filenames (lowercased).
+    static const char* classToString(CharacterClass charClass);
+    // Returns false if the name matches no class; out is left untouched.
+    static bool classFromString(const std::string& name, CharacterClass& out);
+    // True if the raw int is a valid CharacterClass ordinal.
+    static bool isValidClassOrdinal(int ordinal);
 
     // Constructor with character class and name
     Player(CharacterClass charClass, const std::string& name);
@@ -65,6 +77,10 @@ public:
     void setMana(int mana) override { m_mana = mana; }
     void setPosition(float x, float y) { m_x = x; m_y = y; }
     
+    // True once per completed tile-to-tile move, cleared on read. Drives
+    // step-based random encounters.
+    bool consumeStepCompleted();
+
     // Movement
     void move(float dx, float dy, class Map* map);
     void moveUp(class Map* map);
@@ -81,14 +97,27 @@ public:
     void removeItem(const Item* item);
     const std::vector<std::unique_ptr<Item>>& getInventory() const { return m_inventory; }
 
-    // Spell management (for Mage)
-    void addSpell(std::shared_ptr<Spell> spell);
-    const std::vector<std::shared_ptr<Spell>>& getSpells() const { return m_spells; }
+    // Grant every ability this class has unlocked at its current level.
+    // Idempotent, so it is safe to call after loading a save.
+    void refreshAbilities();
 
-    // Character class specific abilities
-    bool canCastSpells() const;
-    bool canSteal() const;
-    bool hasCriticalStrike() const;
+    // Experience and gold
+    int getExperience() const { return m_experience; }
+    int getExperienceToNextLevel() const;
+    void addExperience(int exp);
+    int getGold() const { return m_gold; }
+    void addGold(int amount) { m_gold += amount; }
+    bool spendGold(int amount);
+
+    // Equipment
+    int getEquipmentAttackBonus() const override;
+    int getEquipmentDefenseBonus() const override;
+    const Item* getEquippedWeapon() const { return m_equippedWeapon.get(); }
+    const Item* getEquippedArmor() const { return m_equippedArmor.get(); }
+    void equipWeapon(std::unique_ptr<Item> weapon);
+    void equipArmor(std::unique_ptr<Item> armor);
+    std::unique_ptr<Item> unequipWeapon();
+    std::unique_ptr<Item> unequipArmor();
 
     // Level up function
     void levelUp();
@@ -108,6 +137,8 @@ private:
     int m_magic;
     int m_speed;
     int m_defense;
+    int m_experience;
+    int m_gold;
     float m_x;
     float m_y;
     
@@ -117,11 +148,13 @@ private:
     float m_targetX;
     float m_targetY;
     bool m_isMoving;
+    bool m_stepCompleted = false;
     float m_moveProgress;
     float m_moveSpeed; // tiles per second
     
     int m_textureIndex;
 
     std::vector<std::unique_ptr<Item>> m_inventory;
-    std::vector<std::shared_ptr<Spell>> m_spells;
+    std::unique_ptr<Item> m_equippedWeapon;
+    std::unique_ptr<Item> m_equippedArmor;
 };

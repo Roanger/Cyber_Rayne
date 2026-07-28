@@ -26,6 +26,11 @@ public:
     // Setters
     void setValue(int value) { m_value = value; }
 
+    // Combat bonuses granted while equipped. Declared on the base so callers
+    // holding an Item* can read them without a downcast.
+    virtual int getAttackBonus() const { return 0; }
+    virtual int getDefenseBonus() const { return 0; }
+
     // Item actions
     virtual void use(Player* player) = 0;
 

@@ -4,12 +4,15 @@
 #include "../../include/NPC.h"
 #ifndef NO_VULKAN
 #include "../../include/VulkanRenderer.h"
+#include "../../include/TileTextureGen.h"
 #endif
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
 #include <filesystem>
+#include <iterator>
+#include <vector>
 
 Map::Map(const std::string& name, int width, int height)
     : m_name(name), m_width(width), m_height(height) {
@@ -54,82 +57,26 @@ bool Map::initialize() {
 void Map::loadTileTextures(VulkanRenderer* renderer) {
     if (!renderer) return;
     
-    std::string base = renderer->getAssetsBasePath();
-    std::string tilesPath = base + "/textures/tiles";
-    std::cout << "Loading tile textures from: " << tilesPath << std::endl;
-    
-    // Load proper tile textures from assets/textures/tiles/
-    std::string grassPath = tilesPath + "/grass.png";
-    if (std::filesystem::exists(grassPath)) {
-        m_tileTextures[Tile::TileType::GRASS] = renderer->loadTexture(grassPath);
-        std::cout << "Loaded GRASS texture: " << m_tileTextures[Tile::TileType::GRASS] << std::endl;
-    } else {
-        std::cerr << "GRASS texture not found at: " << grassPath << std::endl;
+    // Tiles are synthesized rather than loaded from disk. They are seamless by
+    // construction, cost ~4KB each instead of a multi-megabyte image, and can be
+    // retuned by editing TileTextureGen.cpp instead of round-tripping through an
+    // art tool. See ASSET_SPEC.md for why tiles are procedural but sprites are not.
+    static constexpr Tile::TileType kTileTypes[] = {
+        Tile::TileType::CONCRETE, Tile::TileType::ROAD,  Tile::TileType::NEON,
+        Tile::TileType::METAL,    Tile::TileType::HOLOGRAM, Tile::TileType::VENDING,
+        Tile::TileType::GRASS,    Tile::TileType::WATER, Tile::TileType::MOUNTAIN,
+        Tile::TileType::SAND,     Tile::TileType::STONE, Tile::TileType::TREE,
+        Tile::TileType::WALL,     Tile::TileType::DOOR,  Tile::TileType::FLOOR,
+    };
+
+    const int sz = TileTextureGen::TILE_SIZE;
+    for (Tile::TileType type : kTileTypes) {
+        const std::vector<uint8_t> pixels = TileTextureGen::generate(type, sz);
+        m_tileTextures[type] = renderer->loadTextureFromMemory(pixels.data(), sz, sz, 4);
     }
-    
-    std::string wallPath = tilesPath + "/wall.png";
-    if (std::filesystem::exists(wallPath)) {
-        m_tileTextures[Tile::TileType::WALL] = renderer->loadTexture(wallPath);
-        std::cout << "Loaded WALL texture: " << m_tileTextures[Tile::TileType::WALL] << std::endl;
-    } else {
-        std::cerr << "WALL texture not found at: " << wallPath << std::endl;
-    }
-    
-    std::string mountainPath = tilesPath + "/mountain.png";
-    if (std::filesystem::exists(mountainPath)) {
-        m_tileTextures[Tile::TileType::MOUNTAIN] = renderer->loadTexture(mountainPath);
-        std::cout << "Loaded MOUNTAIN texture: " << m_tileTextures[Tile::TileType::MOUNTAIN] << std::endl;
-    } else {
-        std::cerr << "MOUNTAIN texture not found at: " << mountainPath << std::endl;
-    }
-    
-    std::string treePath = tilesPath + "/tree.png";
-    if (std::filesystem::exists(treePath)) {
-        m_tileTextures[Tile::TileType::TREE] = renderer->loadTexture(treePath);
-        std::cout << "Loaded TREE texture: " << m_tileTextures[Tile::TileType::TREE] << std::endl;
-    } else {
-        std::cerr << "TREE texture not found at: " << treePath << std::endl;
-    }
-    
-    std::string waterPath = tilesPath + "/water.png";
-    if (std::filesystem::exists(waterPath)) {
-        m_tileTextures[Tile::TileType::WATER] = renderer->loadTexture(waterPath);
-        std::cout << "Loaded WATER texture: " << m_tileTextures[Tile::TileType::WATER] << std::endl;
-    } else {
-        std::cerr << "WATER texture not found at: " << waterPath << std::endl;
-    }
-    
-    std::string stonePath = tilesPath + "/stone.png";
-    if (std::filesystem::exists(stonePath)) {
-        m_tileTextures[Tile::TileType::STONE] = renderer->loadTexture(stonePath);
-        std::cout << "Loaded STONE texture: " << m_tileTextures[Tile::TileType::STONE] << std::endl;
-    } else {
-        std::cerr << "STONE texture not found at: " << stonePath << std::endl;
-    }
-    
-    std::string floorPath = tilesPath + "/floor.png";
-    if (std::filesystem::exists(floorPath)) {
-        m_tileTextures[Tile::TileType::FLOOR] = renderer->loadTexture(floorPath);
-        std::cout << "Loaded FLOOR texture: " << m_tileTextures[Tile::TileType::FLOOR] << std::endl;
-    } else {
-        std::cerr << "FLOOR texture not found at: " << floorPath << std::endl;
-    }
-    
-    std::string sandPath = tilesPath + "/sand.png";
-    if (std::filesystem::exists(sandPath)) {
-        m_tileTextures[Tile::TileType::SAND] = renderer->loadTexture(sandPath);
-        std::cout << "Loaded SAND texture: " << m_tileTextures[Tile::TileType::SAND] << std::endl;
-    } else {
-        std::cerr << "SAND texture not found at: " << sandPath << std::endl;
-    }
-    
-    std::string doorPath = tilesPath + "/door.png";
-    if (std::filesystem::exists(doorPath)) {
-        m_tileTextures[Tile::TileType::DOOR] = renderer->loadTexture(doorPath);
-        std::cout << "Loaded DOOR texture: " << m_tileTextures[Tile::TileType::DOOR] << std::endl;
-    } else {
-        std::cerr << "DOOR texture not found at: " << doorPath << std::endl;
-    }
+
+    std::cout << "Generated " << std::size(kTileTypes) << " procedural tile textures ("
+              << sz << "x" << sz << ")" << std::endl;
 }
 #endif
 
@@ -145,53 +92,79 @@ void Map::update(float deltaTime) {
     }
 }
 
+Map::Viewport Map::getViewport(float screenAspect) const {
+    Viewport vp;
+    // Viewport height in tiles; width derived from aspect ratio to fill screen
+    vp.heightTiles = VIEWPORT_HEIGHT_TILES;
+    vp.widthTiles = static_cast<int>(VIEWPORT_HEIGHT_TILES * screenAspect + 0.5f);
+    if (vp.widthTiles < 1) vp.widthTiles = 1;
+
+    // Default: center on map
+    vp.startX = (m_width > vp.widthTiles) ? (m_width - vp.widthTiles) / 2 : 0;
+    vp.startY = (m_height > vp.heightTiles) ? (m_height - vp.heightTiles) / 2 : 0;
+
+    // If a player position is set, center viewport on player
+    if (m_playerX >= 0 && m_playerY >= 0) {
+        vp.startX = static_cast<int>(m_playerX) - vp.widthTiles / 2;
+        vp.startY = static_cast<int>(m_playerY) - vp.heightTiles / 2;
+        // Clamp to map bounds
+        if (vp.startX + vp.widthTiles > m_width) vp.startX = m_width - vp.widthTiles;
+        if (vp.startY + vp.heightTiles > m_height) vp.startY = m_height - vp.heightTiles;
+        if (vp.startX < 0) vp.startX = 0;
+        if (vp.startY < 0) vp.startY = 0;
+    }
+
+    vp.tileWidth = 2.0f / vp.widthTiles;
+    vp.tileHeight = 2.0f / vp.heightTiles;
+    return vp;
+}
+
+bool Map::worldToNdc(const Viewport& viewport, float worldX, float worldY,
+                     float& ndcX, float& ndcY) const {
+    ndcX = -1.0f + (worldX - viewport.startX) * viewport.tileWidth + viewport.tileWidth * 0.5f;
+    ndcY = -1.0f + (worldY - viewport.startY) * viewport.tileHeight + viewport.tileHeight * 0.5f;
+
+    // Cull with one tile of slack so entities straddling the edge still draw.
+    return worldX >= viewport.startX - 1.0f &&
+           worldX <= viewport.startX + viewport.widthTiles + 1.0f &&
+           worldY >= viewport.startY - 1.0f &&
+           worldY <= viewport.startY + viewport.heightTiles + 1.0f;
+}
+
 #ifndef NO_VULKAN
 void Map::render(VulkanRenderer* renderer) {
-    // Render viewport of the map
-    // Screen is 800x600 (4:3 aspect ratio)
-    // To make square tiles, we need to account for screen aspect ratio
-    const int VIEWPORT_WIDTH = 15;  
-    const int VIEWPORT_HEIGHT = 15; // Same as width for square tiles
-    
-    int startX = (m_width > VIEWPORT_WIDTH) ? (m_width - VIEWPORT_WIDTH) / 2 : 0;
-    int startY = (m_height > VIEWPORT_HEIGHT) ? (m_height - VIEWPORT_HEIGHT) / 2 : 0;
-    int endX = (startX + VIEWPORT_WIDTH < m_width) ? startX + VIEWPORT_WIDTH : m_width;
-    int endY = (startY + VIEWPORT_HEIGHT < m_height) ? startY + VIEWPORT_HEIGHT : m_height;
+    // Use actual swapchain extent for aspect ratio
+    float screenAspect = static_cast<float>(renderer->getSwapchainExtent().width) /
+                         static_cast<float>(renderer->getSwapchainExtent().height);
 
-    // Screen aspect ratio: 800/600 = 1.333 (4:3)
-    // To make square tiles in screen space, we need to adjust for this
-    float screenAspect = 800.0f / 600.0f; // 4:3
-    
-    // Calculate tile size in normalized coordinates
-    float tileWidth = 2.0f / VIEWPORT_WIDTH;
-    float tileHeight = 2.0f / VIEWPORT_HEIGHT;
-    
-    // Adjust width to account for screen aspect ratio to make tiles square
-    tileWidth = tileHeight / screenAspect;
+    Viewport vp = getViewport(screenAspect);
+
+    int endX = (vp.startX + vp.widthTiles < m_width) ? vp.startX + vp.widthTiles : m_width;
+    int endY = (vp.startY + vp.heightTiles < m_height) ? vp.startY + vp.heightTiles : m_height;
 
     // Render only the visible tiles
-    for (int y = startY; y < endY; ++y) {
-        for (int x = startX; x < endX; ++x) {
+    for (int y = vp.startY; y < endY; ++y) {
+        for (int x = vp.startX; x < endX; ++x) {
             Tile* tile = getTile(x, y);
-            if (tile) {
-                // Position calculation: convert grid coordinates to normalized device coordinates
-                float normalizedX = -1.0f + (x - startX) * tileWidth + tileWidth * 0.5f;
-                float normalizedY = -1.0f + (y - startY) * tileHeight + tileHeight * 0.5f;
+            if (!tile) continue;
 
-                // Get texture index for this tile type
-                int textureIndex = -1;
-                auto it = m_tileTextures.find(tile->getType());
-                if (it != m_tileTextures.end()) {
-                    textureIndex = it->second;
-                }
-                
-                // Render tile with square aspect ratio
-                if (textureIndex >= 0) {
-                    renderer->renderSpriteWithTexture(normalizedX, normalizedY, tileWidth, tileHeight, textureIndex);
-                } else {
-                    // Fallback to default white sprite if no texture
-                    renderer->renderSprite(normalizedX, normalizedY, tileWidth, tileHeight);
-                }
+            float normalizedX = 0.0f;
+            float normalizedY = 0.0f;
+            worldToNdc(vp, static_cast<float>(x), static_cast<float>(y), normalizedX, normalizedY);
+
+            // Get texture index for this tile type
+            int textureIndex = -1;
+            auto it = m_tileTextures.find(tile->getType());
+            if (it != m_tileTextures.end()) {
+                textureIndex = it->second;
+            }
+
+            // Render tile with square aspect ratio
+            if (textureIndex >= 0) {
+                renderer->renderSpriteWithTexture(normalizedX, normalizedY, vp.tileWidth, vp.tileHeight, textureIndex);
+            } else {
+                // Fallback to default white sprite if no texture
+                renderer->renderSprite(normalizedX, normalizedY, vp.tileWidth, vp.tileHeight);
             }
         }
     }
@@ -229,6 +202,17 @@ void Map::removeEnemy(Enemy* enemy) {
             break;
         }
     }
+}
+
+std::unique_ptr<Enemy> Map::takeEnemy(Enemy* enemy) {
+    for (auto it = m_enemies.begin(); it != m_enemies.end(); ++it) {
+        if (it->get() == enemy) {
+            auto claimed = std::move(*it);
+            m_enemies.erase(it);
+            return claimed;
+        }
+    }
+    return nullptr;
 }
 
 void Map::clearEnemies() {

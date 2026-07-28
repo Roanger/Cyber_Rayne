@@ -57,8 +57,6 @@ Cyber Rayne is a turn-based JRPG (Final Fantasy 9 reimagined in a cyberpunk sett
 - Replaced placeholder battle stats with working HP progress bars and text labels for player and enemies.
 - Added a Vulkan-free `BitmapFontTest` to verify atlas generation and glyph UV mapping.
 
-## Current Phase
-
 ### Phase 2: Party Model and ATB Combat — COMPLETE
 
 - Introduced a `Combatant` base interface shared by `Player` and `Enemy`.
@@ -70,40 +68,106 @@ Cyber Rayne is a turn-based JRPG (Final Fantasy 9 reimagined in a cyberpunk sett
 - Updated `UIManager` to show per-party-member HP/ATB bars and the current actor's name.
 - Updated `BattleSystemTest` to verify ATB fill, player turns, defeat detection, and status effects.
 
+### Phase 3: Dialogue, Quests, and Progression — COMPLETE
+
+- Added `DialogueNode`, `DialogueTree`, and `DialogueSystem` with branching choices and auto-advance.
+- Added `Quest` and `QuestLog` with objectives, status tracking, and XP/gold rewards.
+- Added experience points, leveling (XP curve), gold, and basic equipment (`Weapon`, `Armor`, `HealingItem`) to `Player`.
+- Updated `BattleSystem` to award XP and gold from defeated enemies to living party members on victory.
+- Added `SaveSystem` with text-based save/load serialization for party and quest log.
+- Added `DialogueSystemTest`, `QuestTest`, `ProgressionTest`, and `SaveLoadTest` to CTest.
+
+### Phase 4: Content and Maps — COMPLETE
+
+- Added cyberpunk tile types (`CONCRETE`, `NEON`, `METAL`, `HOLOGRAM`, `ROAD`, `VENDING`) to the Tile system.
+- Added cyberpunk enemy types (`StreetThug`, `SecurityDrone`, `Netrunner`, `CombatCyborg`, `CorporateEnforcer`) with scaling stats.
+- Added `EncounterTable` with weighted enemy spawns per zone and randomized encounter generation.
+- Replaced fantasy maps with three cyberpunk districts: Neo-Kyoto Central, Neon Alley, Corporate Plaza, with map transitions between them.
+- Enhanced `NPC` with dialogue tree support and interaction flags.
+- Added `ContentFactory` to build the quest chain ("The Data Chip" → "Corporate Intrusion" → "The Truth") and attach dialogue trees to NPCs.
+- Added `ContentTest` to CTest verifying maps, tile types, NPCs, encounter tables, enemy types, quest chain, and NPC dialogues.
+
+## Completed Work (continued)
+
+### Phase 5: Polish and Vertical Slice Lock — COMPLETE
+
+- Added `AudioManager` stub with music/SFX channel types, volume control, mute, and sound registration (no external dependencies, CI-safe).
+- Added `InputConfig` class for key-to-action rebinding with serialize/deserialize for save/load support.
+- Wired main menu: Load Game uses `SaveSystem`, Settings placeholder, Quit exits cleanly.
+- Integrated `ContentFactory` into `GameState` — quest chain and NPC dialogues are created on new game and load.
+- Added pause/unpause flow (PAUSE or OPEN_MENU toggles, mutes audio while paused).
+- Added game-over flow (CONFIRM returns to menu, CANCEL exits).
+- Refactored character selection to use `startNewGame()` helper for cleaner code flow.
+- Added `Phase5Test` to CTest verifying AudioManager and InputConfig functionality.
+- All 10 tests pass on linux-debug build.
+
 ## Current Phase
 
-### Phase 3: Dialogue, Quests, and Progression
+### Phase 6: Cyberpunk Classes, Abilities, and Reachable Combat — COMPLETE
 
-- Add a dialogue system with text boxes and branching choices.
-- Add a quest/journal model.
-- Add experience points, leveling, and basic equipment.
-- Add save/load serialization.
+**Class rename.** `CharacterClass` is now `NETRUNNER` / `SOLO` / `INFILTRATOR`, replacing
+Mage / Warrior / Rogue. Enumerator order is unchanged, because `SaveSystem` persists the
+class as a bare ordinal — **renaming is safe, reordering silently corrupts saves.** Added
+`Player::classToString` / `classFromString` / `isValidClassOrdinal` and routed the display
+name and asset filenames through them, replacing three ad-hoc conversion sites. Character
+portraits are now derived per option from `charClass` rather than a positional list. The
+`Netrunner` *enemy* was renamed `BlackICE` to free the name for the player class. Class art
+lives in `assets/characters/<lowercase class>.png`.
 
-Start here. Do not begin Phase 4 until Phase 3 is verified.
+**Combat is reachable.** Two bugs made it unreachable, neither of which was missing content:
+- `World::render` drew enemies and NPCs at raw tile coordinates treated as NDC, skipping the
+  viewport transform. Every entity in the game rendered off-screen. The viewport math now
+  lives in `Map::getViewport` / `Map::worldToNdc`, shared by tile, entity, and player
+  rendering, so the three paths cannot drift apart again.
+- Enemies spawned at four hardcoded corners with no walkability check — two inside buildings
+  on Neo-Kyoto Central, three outside the bounds of the smaller Corporate Plaza. Replaced with
+  a walkable-tile search that avoids occupied tiles and keeps its distance from the player.
 
-## Upcoming Phases
+Both encounter styles are live: walking into a visible enemy, and a per-zone step-based
+random roll (`EncounterTable::getEncounterRate`). Both move their enemies into
+`World::m_activeEncounter`, which owns them for the fight — taking them off the map is what
+stops a won battle from retriggering on the same tile. Battles are scoped to the triggering
+group rather than every enemy on the map.
 
-### Phase 4: Content and Maps
+**Status effects and equipment now do something.** `StatusEffect::update()` was never called,
+so effects never expired; `onTick` applied full magnitude every frame (~1200 dmg/sec for a
+magnitude-20 poison at 60fps). Added a tick accumulator and wired expiry. `DEFENSE_UP/DOWN`,
+`ATTACK_UP/DOWN`, `SLOW`, and `STUN` now change real numbers through
+`Combatant::getEffectiveStrength/getEffectiveDefense/getAtbSpeedMultiplier/isStunned`.
+Equipment bonuses reach those same accessors via virtual `Item::getAttackBonus/getDefenseBonus`,
+so no downcast is needed. Player and enemy mitigation share one formula with a damage floor —
+previously enemies subtracted full defense and a level-1 character did literally zero damage
+to a StoneGolem.
 
-- Add a dialogue system with text boxes and branching choices.
-- Add a quest/journal model.
-- Add experience points, leveling, and basic equipment.
-- Add save/load serialization.
+**Ability system.** `Ability` + `AbilityRegistry` replace `Spell`, which was never instantiated
+anywhere and hard-gated to Mage. Abilities operate on `Combatant`, so party and enemies share
+one execution path and the four `static_cast<Player*>` sites in `BattleSystem` are gone. Cost
+is validated *before* the turn is committed — an unaffordable ability is rejected instead of
+silently burning the turn. `submitPlayerAction` takes an `ActionRequest` (ability, item, and
+target indices) instead of one overloaded int, which is what makes manual targeting and
+ally-targeted healing possible. Four abilities per class, unlocked by level; enemy kits keyed
+by type name.
 
-### Phase 4: Content and Maps
+**Battle UI** is data-driven off the acting character's ability list, with working
+`ABILITY_SELECTION` and `TARGET_SELECTION` states (previously declared but dead), generic grid
+navigation instead of hardcoded 2×2 arithmetic, a reachable Flee entry, and CANCEL to back out.
+`UIManager::BattleAction` is now an alias of `BattleSystem::BattleAction`, removing the
+hand-written translation switch in `GameState`.
 
-- Replace hard-coded fantasy maps with cyberpunk districts.
-- Add NPCs, interactable objects, and transitions between maps.
-- Add enemy encounter tables per zone.
-- Add at least one short playable quest chain.
+**Also fixed along the way:** the save loader called `setLevel()` before its `levelUp()` replay
+loop, so the loop never ran and a high-level character loaded with level-1 stats; ATB pushed a
+full-gauge combatant onto the ready queue every frame; `m_rewardedEnemies` was never cleared
+between battles; per-frame renderer diagnostics spammed ~30k lines per run.
 
-### Phase 5: Polish and Vertical Slice Lock
+**Dev shortcut:** `CYBERRAYNE_START=world ./CyberRayne` skips the menus into exploration.
 
-- Audio integration (music, SFX).
-- Controller/input rebinding.
-- Main menu flow and game loop integration.
-- Performance pass and cleanup.
-- Finalize the vertical slice build.
+13 CTest suites pass, including new `AbilityTest`, `StatusEffectTest`, and `EncounterTest`.
+
+### Next Up
+
+- Replace placeholder entity markers (coloured squares) with real enemy and NPC sprites.
+- MP bars and status-effect indicators in the battle HUD.
+- Wire quest objectives to combat — "Defeat the street thugs" has no code that completes it.
 
 ## Working Rules
 

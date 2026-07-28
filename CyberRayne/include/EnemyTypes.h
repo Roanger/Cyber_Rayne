@@ -69,3 +69,41 @@ public:
 protected:
     void initializeStats() override;
 };
+
+// Cyberpunk District Enemies
+class StreetThug : public Enemy {
+public:
+    StreetThug(int level);
+protected:
+    void initializeStats() override;
+};
+
+class SecurityDrone : public Enemy {
+public:
+    SecurityDrone(int level);
+protected:
+    void initializeStats() override;
+};
+
+// Hostile intrusion countermeasures. Named to avoid colliding with the
+// player's NETRUNNER class.
+class BlackICE : public Enemy {
+public:
+    BlackICE(int level);
+protected:
+    void initializeStats() override;
+};
+
+class CombatCyborg : public Enemy {
+public:
+    CombatCyborg(int level);
+protected:
+    void initializeStats() override;
+};
+
+class CorporateEnforcer : public Enemy {
+public:
+    CorporateEnforcer(int level);
+protected:
+    void initializeStats() override;
+};

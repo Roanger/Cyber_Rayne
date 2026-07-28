@@ -5,7 +5,7 @@ A turn-based JRPG inspired by Final Fantasy 9, built with C++ and Vulkan.
 ## Features
 - Turn-based battle system
 - Pixel-art graphics style (similar to Stardew Valley)
-- Three playable characters (Mage, Warrior, Rogue)
+- Three playable classes (Netrunner, Solo, Infiltrator)
 - Multiple maps and biomes
 - Character-specific starter stories
 - Vulkan-based rendering system

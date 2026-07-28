@@ -42,18 +42,31 @@ add_executable(CyberRayne
     src/entities/Enemy.cpp
     src/entities/EnemyTypes.cpp
     src/entities/Item.cpp
-    src/entities/Spell.cpp
+    src/entities/Ability.cpp
+    src/systems/AbilityRegistry.cpp
     src/entities/NPC.cpp
     src/entities/Combatant.cpp
     src/entities/Party.cpp
     src/entities/StatusEffect.cpp
+    src/entities/DialogueNode.cpp
+    src/entities/DialogueTree.cpp
+    src/entities/Quest.cpp
+    src/entities/QuestLog.cpp
+    src/entities/Equipment.cpp
     src/core/Map.cpp
     src/core/Tile.cpp
     src/core/World.cpp
     src/systems/CharacterSelectionSystem.cpp
     src/systems/BattleSystem.cpp
     src/systems/UIManager.cpp
+    src/systems/DialogueSystem.cpp
+    src/systems/SaveSystem.cpp
+    src/systems/EncounterTable.cpp
+    src/systems/ContentFactory.cpp
+    src/systems/AudioManager.cpp
+    src/systems/InputConfig.cpp
     src/graphics/VulkanRenderer.cpp
+    src/graphics/TileTextureGen.cpp
     src/ui/MenuSystem.cpp
     src/ui/BitmapFont.cpp
     src/ui/TextRenderer.cpp
@@ -72,11 +85,15 @@ set(GAMEPLAY_TEST_SUPPORT_SOURCES
     src/entities/Player.cpp
     src/entities/Enemy.cpp
     src/entities/Item.cpp
-    src/entities/Spell.cpp
+    src/entities/Ability.cpp
+    src/systems/AbilityRegistry.cpp
     src/entities/NPC.cpp
     src/entities/Combatant.cpp
     src/entities/Party.cpp
     src/entities/StatusEffect.cpp
+    src/entities/Equipment.cpp
+    src/entities/DialogueNode.cpp
+    src/entities/DialogueTree.cpp
     src/core/Map.cpp
     src/core/Tile.cpp
 )
@@ -105,7 +122,76 @@ add_executable(BitmapFontTest
     src/ui/BitmapFont.cpp
 )
 
-foreach(test_target CharacterSelectionTest BattleSystemTest EnemyTypesTest BitmapFontTest)
+add_executable(DialogueSystemTest
+    src/tests/DialogueSystemTest.cpp
+    src/systems/DialogueSystem.cpp
+    src/entities/DialogueNode.cpp
+    src/entities/DialogueTree.cpp
+)
+
+add_executable(QuestTest
+    src/tests/QuestTest.cpp
+    src/entities/Quest.cpp
+    src/entities/QuestLog.cpp
+)
+
+add_executable(ProgressionTest
+    src/tests/ProgressionTest.cpp
+    src/systems/BattleSystem.cpp
+    src/entities/Equipment.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
+add_executable(SaveLoadTest
+    src/tests/SaveLoadTest.cpp
+    src/systems/SaveSystem.cpp
+    src/entities/Quest.cpp
+    src/entities/QuestLog.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
+add_executable(ContentTest
+    src/tests/ContentTest.cpp
+    src/core/World.cpp
+    src/systems/EncounterTable.cpp
+    src/systems/ContentFactory.cpp
+    src/systems/DialogueSystem.cpp
+    src/entities/EnemyTypes.cpp
+    src/entities/Quest.cpp
+    src/entities/QuestLog.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
+add_executable(Phase5Test
+    src/tests/Phase5Test.cpp
+    src/systems/AudioManager.cpp
+    src/systems/InputConfig.cpp
+)
+
+add_executable(AbilityTest
+    src/tests/AbilityTest.cpp
+    src/systems/BattleSystem.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
+add_executable(StatusEffectTest
+    src/tests/StatusEffectTest.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
+add_executable(EncounterTest
+    src/tests/EncounterTest.cpp
+    src/core/World.cpp
+    src/systems/EncounterTable.cpp
+    src/systems/ContentFactory.cpp
+    src/systems/DialogueSystem.cpp
+    src/entities/EnemyTypes.cpp
+    src/entities/Quest.cpp
+    src/entities/QuestLog.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
+foreach(test_target CharacterSelectionTest BattleSystemTest EnemyTypesTest BitmapFontTest DialogueSystemTest QuestTest ProgressionTest SaveLoadTest ContentTest Phase5Test EncounterTest StatusEffectTest AbilityTest)
     target_include_directories(${test_target} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party
@@ -146,13 +232,26 @@ set(HEADERS
     include/World.h
     include/Map.h
     include/Tile.h
-    include/Spell.h
+    include/TileTextureGen.h
+    include/Ability.h
+    include/AbilityRegistry.h
     include/Item.h
     include/CharacterSelectionSystem.h
     include/MenuSystem.h
     include/Combatant.h
     include/Party.h
     include/StatusEffect.h
+    include/DialogueNode.h
+    include/DialogueTree.h
+    include/DialogueSystem.h
+    include/Quest.h
+    include/QuestLog.h
+    include/Equipment.h
+    include/SaveSystem.h
+    include/EncounterTable.h
+    include/ContentFactory.h
+    include/AudioManager.h
+    include/InputConfig.h
     include/ui/BitmapFont.h
     include/ui/BitmapFontData.h
     include/ui/TextRenderer.h

@@ -3,7 +3,6 @@
 #include "../../include/Enemy.h"
 #include "../../include/Map.h"
 #include "../../include/Player.h"
-#include "../../include/Spell.h"
 #include "../../include/StatusEffect.h"
 #include <iostream>
 #include <memory>
@@ -38,7 +37,7 @@ int main() {
            "action should not be accepted before a player is ready");
 
     // Advance time until a player character becomes ready.
-    // The leader (Warrior) has high speed and should fill first.
+    // The leader (Solo) has high speed and should fill first.
     int ticks = 0;
     while (battle.getState() != BattleSystem::State::WAITING_PLAYER_ACTION && ticks < 10000) {
         battle.update(0.016f);
@@ -65,16 +64,31 @@ int main() {
     }
     expect(battle.submitPlayerAction(BattleSystem::BattleAction::DEFEND), "defend action should be accepted");
 
-    // Status effect application: add a short poison to the enemy and tick it.
-    // Use a magnitude high enough to overcome the enemy's defense.
-    enemies[0]->addStatusEffect(std::make_unique<StatusEffect>(StatusEffect::Type::POISON, 0.5f, 20));
+    // Poison applies its magnitude once per StatusEffect::TICK_INTERVAL, not
+    // once per frame. Magnitude is high enough to clear the enemy's defense.
+    enemies[0]->addStatusEffect(std::make_unique<StatusEffect>(StatusEffect::Type::POISON, 2.5f, 20));
     const int prePoisonHealth = enemies[0]->getHealth();
-    battle.update(0.3f);
-    expect(enemies[0]->getHealth() < prePoisonHealth, "poison status effect should damage the enemy over time");
+
+    // A fraction of a tick interval must not deal damage yet.
+    battle.update(StatusEffect::TICK_INTERVAL * 0.4f);
+    expect(enemies[0]->getHealth() == prePoisonHealth,
+           "poison should not damage before a full tick interval elapses");
+
+    // Crossing the interval deals exactly one tick's worth.
+    battle.update(StatusEffect::TICK_INTERVAL * 0.7f);
+    const int afterOneTick = enemies[0]->getHealth();
+    expect(afterOneTick < prePoisonHealth, "poison should damage the enemy once a tick elapses");
+    expect(prePoisonHealth - afterOneTick <= 20,
+           "a single poison tick should not exceed its magnitude");
+
+    // The effect expires. Before the update() call was wired into
+    // updateStatusEffects, remaining time never decreased and poison was permanent.
+    battle.update(3.0f);
+    expect(enemies[0]->getStatusEffects().empty(), "poison should expire once its duration elapses");
 
     // Test party defeat detection by killing all members.
     auto doomedParty = std::make_unique<Party>();
-    auto doomed = std::make_unique<Player>(Player::CharacterClass::WARRIOR, "Doomed");
+    auto doomed = std::make_unique<Player>(Player::CharacterClass::SOLO, "Doomed");
     doomed->setHealth(1);
     doomedParty->addMember(std::move(doomed));
 

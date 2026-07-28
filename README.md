@@ -10,7 +10,7 @@ Cyber_Rayne is a role-playing game set in a futuristic cyber world. It features 
 
 - **Custom Engine**: Built on top of Vulkan for robust graphics performance.
 - **Turn-Based Combat**: Strategic battle system with spells, items, and enemy AI.
-- **Character System**: Class-based character selection (Warrior, Mage, Rogue) with unique stats.
+- **Character System**: Class-based character selection (Solo, Netrunner, Infiltrator) with unique stats and ability kits.
 - **Entity Management**: Comprehensive system for NPCs, Enemies, and interactive items.
 - **UI System**: Custom UI manager for menus, battle interfaces, and dialogue.
 

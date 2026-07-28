@@ -5,6 +5,8 @@
 #include "../../include/Enemy.h"
 #include "../../include/Combatant.h"
 #include "../../include/ui/UIPanel.h"
+#include "../../include/Ability.h"
+#include "../../include/Item.h"
 #include <iostream>
 #include <sstream>
 
@@ -20,13 +22,11 @@ std::string buildHpLabel(const std::string& name, int current, int max) {
 
 UIManager::UIManager()
     : m_battleState(BattleMenuState::MAIN_MENU),
-      m_selectedAction(BattleAction::NONE),
       m_actionSelected(false),
       m_menuIndex(0),
-      m_selectedTargetIndex(0),
-      m_selectedSpellIndex(0),
       m_textRenderer(std::make_unique<TextRenderer>()),
       m_currentActor(nullptr) {
+    refreshEntries();
 }
 
 UIManager::~UIManager() = default;
@@ -44,45 +44,221 @@ void UIManager::loadTextures(VulkanRenderer* renderer) {
     }
 }
 
+void UIManager::setCurrentActor(Combatant* actor) {
+    if (actor != m_currentActor) {
+        m_currentActor = actor;
+        // A new actor means a new ability list, so start from the top level.
+        m_battleState = BattleMenuState::MAIN_MENU;
+        m_menuIndex = 0;
+        m_pendingAbilityIndex = -1;
+        m_pendingItemIndex = -1;
+        refreshEntries();
+    }
+}
+
+const Ability* UIManager::pendingAbility() const {
+    if (!m_currentActor || m_pendingAbilityIndex < 0) {
+        return nullptr;
+    }
+    const auto& abilities = m_currentActor->getAbilities();
+    if (m_pendingAbilityIndex >= static_cast<int>(abilities.size())) {
+        return nullptr;
+    }
+    return abilities[m_pendingAbilityIndex];
+}
+
+int UIManager::getMenuEntryCount() const {
+    return static_cast<int>(m_entries.size());
+}
+
+void UIManager::refreshEntries() {
+    m_entries.clear();
+
+    switch (m_battleState) {
+        case BattleMenuState::MAIN_MENU:
+            // Flee was present in the action enum but had no button, so it was
+            // unreachable from the UI.
+            m_entries.push_back({"Attack", true});
+            m_entries.push_back({"Ability", m_currentActor && !m_currentActor->getAbilities().empty()});
+            m_entries.push_back({"Item", true});
+            m_entries.push_back({"Defend", true});
+            m_entries.push_back({"Flee", true});
+            break;
+
+        case BattleMenuState::ABILITY_SELECTION: {
+            if (!m_currentActor) break;
+            for (const Ability* ability : m_currentActor->getAbilities()) {
+                if (!ability) continue;
+                std::ostringstream oss;
+                oss << ability->getName() << "  " << ability->getManaCost() << "MP";
+                // Unaffordable abilities stay visible but greyed, so the player
+                // can see what they are saving toward.
+                m_entries.push_back({oss.str(), ability->canAfford(m_currentActor)});
+            }
+            break;
+        }
+
+        case BattleMenuState::ITEM_SELECTION: {
+            const Player* player = (m_currentActor && m_currentActor->isPlayer())
+                                       ? static_cast<const Player*>(m_currentActor)
+                                       : nullptr;
+            if (!player) break;
+            for (const auto& item : player->getInventory()) {
+                if (item) {
+                    m_entries.push_back({item->getName(), true});
+                }
+            }
+            break;
+        }
+
+        case BattleMenuState::TARGET_SELECTION:
+            for (Combatant* target : m_targets) {
+                if (target && target->isAlive()) {
+                    std::ostringstream oss;
+                    oss << target->getName() << "  " << target->getHealth() << "/" << target->getMaxHealth();
+                    m_entries.push_back({oss.str(), true});
+                }
+            }
+            break;
+
+        case BattleMenuState::WAITING:
+            break;
+    }
+
+    if (m_menuIndex >= static_cast<int>(m_entries.size())) {
+        m_menuIndex = m_entries.empty() ? 0 : static_cast<int>(m_entries.size()) - 1;
+    }
+    if (m_menuIndex < 0) {
+        m_menuIndex = 0;
+    }
+    m_menuDirty = true;
+}
+
+void UIManager::commit(const ActionRequest& request) {
+    m_request = request;
+    m_actionSelected = true;
+    m_battleState = BattleMenuState::MAIN_MENU;
+    m_menuIndex = 0;
+    m_pendingAbilityIndex = -1;
+    m_pendingItemIndex = -1;
+    refreshEntries();
+}
+
+void UIManager::cancelToMainMenu() {
+    m_battleState = BattleMenuState::MAIN_MENU;
+    m_menuIndex = 0;
+    m_pendingAbilityIndex = -1;
+    m_pendingItemIndex = -1;
+    m_statusMessage.clear();
+    refreshEntries();
+}
+
+void UIManager::confirmCurrentEntry() {
+    if (m_menuIndex < 0 || m_menuIndex >= static_cast<int>(m_entries.size())) {
+        return;
+    }
+    if (!m_entries[m_menuIndex].enabled) {
+        m_statusMessage = "Not enough MP.";
+        return;
+    }
+
+    switch (m_battleState) {
+        case BattleMenuState::MAIN_MENU:
+            switch (m_menuIndex) {
+                case 0:  // Attack
+                    m_pendingAbilityIndex = -1;
+                    m_battleState = BattleMenuState::TARGET_SELECTION;
+                    m_menuIndex = 0;
+                    refreshEntries();
+                    break;
+                case 1:  // Ability
+                    m_battleState = BattleMenuState::ABILITY_SELECTION;
+                    m_menuIndex = 0;
+                    refreshEntries();
+                    break;
+                case 2:  // Item
+                    m_battleState = BattleMenuState::ITEM_SELECTION;
+                    m_menuIndex = 0;
+                    refreshEntries();
+                    break;
+                case 3:  // Defend
+                    commit(ActionRequest::defend());
+                    break;
+                case 4:  // Flee
+                    commit(ActionRequest::flee());
+                    break;
+                default:
+                    break;
+            }
+            break;
+
+        case BattleMenuState::ABILITY_SELECTION: {
+            m_pendingAbilityIndex = m_menuIndex;
+            const Ability* ability = pendingAbility();
+            if (!ability) {
+                cancelToMainMenu();
+                break;
+            }
+            // Only single-target abilities need a choice; area and self
+            // abilities resolve immediately.
+            if (ability->needsTargetChoice()) {
+                m_battleState = BattleMenuState::TARGET_SELECTION;
+                m_menuIndex = 0;
+                refreshEntries();
+            } else {
+                commit(ActionRequest::ability(m_pendingAbilityIndex, -1));
+            }
+            break;
+        }
+
+        case BattleMenuState::ITEM_SELECTION:
+            m_pendingItemIndex = m_menuIndex;
+            commit(ActionRequest::item(m_pendingItemIndex, -1));
+            break;
+
+        case BattleMenuState::TARGET_SELECTION:
+            if (m_pendingAbilityIndex >= 0) {
+                commit(ActionRequest::ability(m_pendingAbilityIndex, m_menuIndex));
+            } else {
+                commit(ActionRequest::attack(m_menuIndex));
+            }
+            break;
+
+        case BattleMenuState::WAITING:
+            break;
+    }
+}
+
 void UIManager::rebuildBattleMenu(VulkanRenderer* renderer) {
     if (!renderer) {
         return;
     }
 
     int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
-    int startY = screenH - BUTTON_HEIGHT * 2 - MENU_START_Y_OFFSET;
     const int gap = 20;
-
-    const char* labels[] = {"Attack", "Magic", "Item", "Defend"};
-    const BattleAction actions[] = {
-        BattleAction::ATTACK,
-        BattleAction::MAGIC,
-        BattleAction::ITEM,
-        BattleAction::DEFEND
-    };
+    const int rows = (static_cast<int>(m_entries.size()) + MENU_COLUMNS - 1) / MENU_COLUMNS;
+    int startY = screenH - BUTTON_HEIGHT * (rows > 0 ? rows : 1) - MENU_START_Y_OFFSET;
 
     m_battleRoot.clear();
     m_battleButtons.clear();
 
-    for (int i = 0; i < 4; ++i) {
-        int bx = MENU_START_X + (i % 2) * (BUTTON_WIDTH + gap);
-        int by = startY + (i / 2) * (BUTTON_HEIGHT + gap);
-        auto button = std::make_unique<UIButton>(bx, by, BUTTON_WIDTH, BUTTON_HEIGHT, labels[i]);
-        button->setColor(0xCC333333);
-        button->setSelectedColor(0xFF6666FF);
-        button->setLabelColor(0xFFFFFFFF);
-        button->setLabelScale(2);
+    for (std::size_t i = 0; i < m_entries.size(); ++i) {
+        int col = static_cast<int>(i) % MENU_COLUMNS;
+        int row = static_cast<int>(i) / MENU_COLUMNS;
+        int bx = MENU_START_X + col * (BUTTON_WIDTH + gap);
+        int by = startY + row * (BUTTON_HEIGHT + gap);
 
-        BattleAction action = actions[i];
-        button->setOnConfirm([this, action]() {
-            m_selectedAction = action;
-            m_actionSelected = true;
-        });
+        auto button = std::make_unique<UIButton>(bx, by, BUTTON_WIDTH, BUTTON_HEIGHT, m_entries[i].label);
+        button->setColor(m_entries[i].enabled ? 0xCC333333 : 0xCC1A1A1A);
+        button->setSelectedColor(0xFF6666FF);
+        button->setLabelColor(m_entries[i].enabled ? 0xFFFFFFFF : 0xFF808080);
+        button->setLabelScale(2);
 
         m_battleButtons.push_back(button.get());
         m_battleRoot.addWidget(std::move(button));
     }
 
+    m_menuDirty = false;
     updateButtonSelection();
 }
 
@@ -99,8 +275,19 @@ void UIManager::renderBattleUI(VulkanRenderer* renderer, Party* party, const std
         return;
     }
 
-    // Rebuild the menu on the first frame if the screen size is known.
-    if (m_battleButtons.empty()) {
+    // Target selection lists the living enemies as of this frame.
+    m_targets.clear();
+    for (Combatant* enemy : enemies) {
+        if (enemy && enemy->isAlive()) {
+            m_targets.push_back(enemy);
+        }
+    }
+    if (m_battleState == BattleMenuState::TARGET_SELECTION &&
+        static_cast<int>(m_targets.size()) != static_cast<int>(m_entries.size())) {
+        refreshEntries();
+    }
+
+    if (m_battleButtons.empty() || m_menuDirty) {
         rebuildBattleMenu(renderer);
     }
 
@@ -191,45 +378,56 @@ void UIManager::handleInput(InputAction action) {
     if (!m_currentActor || !m_currentActor->isPlayer()) {
         return;
     }
+    if (m_battleState == BattleMenuState::WAITING || m_entries.empty()) {
+        return;
+    }
 
-    if (m_battleState == BattleMenuState::MAIN_MENU) {
-        switch (action) {
-            case InputAction::MOVE_UP:
-                if (m_menuIndex >= 2) {
-                    m_menuIndex -= 2;
-                    updateButtonSelection();
-                }
-                break;
-            case InputAction::MOVE_DOWN:
-                if (m_menuIndex <= 1) {
-                    m_menuIndex += 2;
-                    updateButtonSelection();
-                }
-                break;
-            case InputAction::MOVE_LEFT:
-                if (m_menuIndex % 2 == 1) {
-                    m_menuIndex -= 1;
-                    updateButtonSelection();
-                }
-                break;
-            case InputAction::MOVE_RIGHT:
-                if (m_menuIndex % 2 == 0) {
-                    m_menuIndex += 1;
-                    updateButtonSelection();
-                }
-                break;
-            case InputAction::CONFIRM:
-                if (m_menuIndex >= 0 && m_menuIndex < static_cast<int>(m_battleButtons.size())) {
-                    m_battleButtons[m_menuIndex]->handleInput(InputAction::CONFIRM);
-                }
-                break;
-        }
+    const int count = static_cast<int>(m_entries.size());
+
+    // Generic grid walk driven by the entry count, rather than arithmetic
+    // hardcoded to a fixed 2x2 layout.
+    switch (action) {
+        case InputAction::MOVE_UP:
+            if (m_menuIndex - MENU_COLUMNS >= 0) {
+                m_menuIndex -= MENU_COLUMNS;
+                updateButtonSelection();
+            }
+            break;
+        case InputAction::MOVE_DOWN:
+            if (m_menuIndex + MENU_COLUMNS < count) {
+                m_menuIndex += MENU_COLUMNS;
+                updateButtonSelection();
+            }
+            break;
+        case InputAction::MOVE_LEFT:
+            if (m_menuIndex % MENU_COLUMNS != 0) {
+                m_menuIndex -= 1;
+                updateButtonSelection();
+            }
+            break;
+        case InputAction::MOVE_RIGHT:
+            if (m_menuIndex % MENU_COLUMNS != MENU_COLUMNS - 1 && m_menuIndex + 1 < count) {
+                m_menuIndex += 1;
+                updateButtonSelection();
+            }
+            break;
+        case InputAction::CONFIRM:
+            confirmCurrentEntry();
+            break;
+        case InputAction::CANCEL:
+            // Back out of a submenu instead of leaving the player stuck in it.
+            if (m_battleState != BattleMenuState::MAIN_MENU) {
+                cancelToMainMenu();
+            }
+            break;
+        default:
+            break;
     }
 }
 
 void UIManager::resetAction() {
     m_actionSelected = false;
-    m_selectedAction = BattleAction::NONE;
+    m_request = ActionRequest{};
 }
 
 void UIManager::displayMessage(const std::string& message) {

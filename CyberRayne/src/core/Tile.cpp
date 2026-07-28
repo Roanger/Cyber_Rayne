@@ -37,6 +37,26 @@ Tile::Tile(TileType type, bool walkable)
         case TileType::FLOOR:
             m_texture = "floor.png";
             break;
+        case TileType::CONCRETE:
+            m_texture = "concrete.png";
+            break;
+        case TileType::NEON:
+            m_texture = "neon.png";
+            break;
+        case TileType::METAL:
+            m_texture = "metal.png";
+            break;
+        case TileType::HOLOGRAM:
+            m_texture = "hologram.png";
+            m_walkable = false; // Holograms are decorative
+            break;
+        case TileType::ROAD:
+            m_texture = "road.png";
+            break;
+        case TileType::VENDING:
+            m_texture = "vending.png";
+            m_walkable = false; // Vending machines are solid
+            break;
         default:
             m_texture = "unknown.png";
             break;

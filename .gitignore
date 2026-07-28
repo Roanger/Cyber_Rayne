@@ -56,3 +56,7 @@ Makefile
 # vcpkg
 vcpkg/
 vcpkg_installed/
+
+# Python
+__pycache__/
+*.py[cod]

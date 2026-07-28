@@ -28,9 +28,9 @@ const std::vector<const char*> deviceExtensions = {
 };
 
 #ifdef NDEBUG
-const bool enableValidationLayers = false;
+bool enableValidationLayers = false;
 #else
-const bool enableValidationLayers = true;
+bool enableValidationLayers = true;
 #endif
 
 const int m_maxFramesInFlight = 2;
@@ -188,8 +188,8 @@ VulkanRenderer::VulkanRenderer()
       m_renderPass(VK_NULL_HANDLE),
       m_commandPool(VK_NULL_HANDLE),
       m_currentFrame(0),
-      m_windowWidth(800),
-      m_windowHeight(600),
+      m_windowWidth(1920),
+      m_windowHeight(1080),
       m_running(false),
       m_spritesToRender(0) {
     // Initialize vectors
@@ -289,10 +289,11 @@ bool VulkanRenderer::initialize(uint32_t width, uint32_t height, const std::stri
         std::string assetsDir = findAssetsDirectory();
         m_assetsBasePath = assetsDir;
         
-        // Load a texture (e.g., mage)
-        std::string texturePath = assetsDir + "/mage.png";
+        // Seed the descriptor set with a real texture so the pipeline has a
+        // valid binding before any gameplay texture is loaded.
+        std::string texturePath = assetsDir + "/characters/netrunner.png";
         if (!createTextureImage(texturePath)) {
-            std::cerr << "Failed to load mage texture from: " << texturePath << std::endl;
+            std::cerr << "Failed to load seed texture from: " << texturePath << std::endl;
             std::cerr << "Continuing with default texture." << std::endl;
         }
 
@@ -537,11 +538,6 @@ bool VulkanRenderer::drawFrame() {
     // Use the per-frame semaphore for acquisition since we don't know the image index yet
     VkResult result = vkAcquireNextImageKHR(m_device, m_swapChain, UINT64_MAX, m_imageAvailableSemaphores[m_currentFrame], VK_NULL_HANDLE, &imageIndex);
     
-    // Add logging to trace imageIndex and vector sizes
-    std::cout << "imageIndex: " << imageIndex << std::endl;
-    std::cout << "m_imagesInFlight size: " << m_imagesInFlight.size() << std::endl;
-    std::cout << "m_commandBuffers size: " << m_commandBuffers.size() << std::endl;
-
     if (result == VK_ERROR_OUT_OF_DATE_KHR) {
         // Swap chain is out of date, recreate it
         return true;
@@ -696,8 +692,8 @@ bool VulkanRenderer::createWindow() {
 
 bool VulkanRenderer::createInstance() {
     if (enableValidationLayers && !checkValidationLayerSupport()) {
-        std::cerr << "Validation layers requested, but not available!" << std::endl;
-        return false;
+        std::cerr << "Validation layers requested, but not available. Disabling." << std::endl;
+        enableValidationLayers = false;
     }
 
     VkApplicationInfo appInfo{};
@@ -1050,14 +1046,11 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     VkRenderPassBeginInfo renderPassInfo{};
     renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderPassInfo.renderPass = m_renderPass;
-    // Add logging to trace framebuffer access
-    std::cout << "Accessing framebuffer with imageIndex: " << imageIndex << std::endl;
-    std::cout << "m_framebuffers size: " << m_framebuffers.size() << std::endl;
     renderPassInfo.framebuffer = m_framebuffers[imageIndex];
     renderPassInfo.renderArea.offset = {0, 0};
     renderPassInfo.renderArea.extent = m_swapChainExtent;
 
-    VkClearValue clearColor = {{{1.0f, 0.0f, 0.0f, 1.0f}}};
+    VkClearValue clearColor = {{{0.02f, 0.02f, 0.05f, 1.0f}}};
     // Reduced logging - only log once per session
     static bool loggedClearColor = false;
     if (!loggedClearColor) {
@@ -1094,11 +1087,6 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
 
     // Bind index buffer
     vkCmdBindIndexBuffer(commandBuffer, m_indexBuffer, 0, VK_INDEX_TYPE_UINT16);
-
-    // Only log sprite count if it's excessive (debugging)
-    if (m_spritesToRender > 10) {
-        std::cout << "[DEBUG] Processing " << m_spritesToRender << " sprites in command buffer" << std::endl;
-    }
 
     // DEBUG: Log swapchain extent
     static bool loggedExtent = false;
@@ -1497,11 +1485,16 @@ void VulkanRenderer::transitionImageLayout(VkImage image, VkFormat format, VkIma
 void VulkanRenderer::createTextureSampler() {
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    samplerInfo.magFilter = VK_FILTER_LINEAR;
-    samplerInfo.minFilter = VK_FILTER_LINEAR;
-    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    // NEAREST keeps pixel-art texels crisp when scaled up to screen size;
+    // LINEAR would smear a 32px tile into mush across ~72 screen pixels.
+    samplerInfo.magFilter = VK_FILTER_NEAREST;
+    samplerInfo.minFilter = VK_FILTER_NEAREST;
+    // CLAMP_TO_EDGE, not REPEAT: sprite quads sample the full [0,1] UV range, and
+    // REPEAT bleeds the opposite edge in along the borders. Tile seamlessness is a
+    // property of the generated pattern (see TileTextureGen.cpp), not of the sampler.
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     samplerInfo.anisotropyEnable = VK_FALSE;
     samplerInfo.maxAnisotropy = 1.0f;
     samplerInfo.borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK;

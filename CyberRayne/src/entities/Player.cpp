@@ -1,32 +1,68 @@
 #include "../../include/Player.h"
 #include "../../include/Item.h"
-#include "../../include/Spell.h"
+#include "../../include/Ability.h"
+#include "../../include/AbilityRegistry.h"
 #include "../../include/Map.h"
 #ifndef NO_VULKAN
 #include "../../include/VulkanRenderer.h"
 #endif
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 #include <filesystem>
+
+const char* Player::classToString(CharacterClass charClass) {
+    switch (charClass) {
+        case CharacterClass::NETRUNNER:   return "Netrunner";
+        case CharacterClass::SOLO:        return "Solo";
+        case CharacterClass::INFILTRATOR: return "Infiltrator";
+    }
+    return "Unknown";
+}
+
+bool Player::classFromString(const std::string& name, CharacterClass& out) {
+    for (int i = 0; i < CHARACTER_CLASS_COUNT; ++i) {
+        auto candidate = static_cast<CharacterClass>(i);
+        if (name == classToString(candidate)) {
+            out = candidate;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool Player::isValidClassOrdinal(int ordinal) {
+    return ordinal >= 0 && ordinal < CHARACTER_CLASS_COUNT;
+}
 
 Player::Player(CharacterClass charClass, const std::string& name)
     : m_characterClass(charClass), m_name(name), m_level(1), m_health(100), m_mana(50),
       m_maxHealth(100), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
+      m_experience(0), m_gold(0),
       m_x(0.0f), m_y(0.0f), m_startX(0.0f), m_startY(0.0f), m_targetX(0.0f), m_targetY(0.0f), 
-      m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(4.0f), m_textureIndex(-1) {
+      m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(8.0f), m_textureIndex(-1) {
     initializeStats();
+    refreshAbilities();
 }
 
 // Default constructor
 Player::Player() 
-    : m_characterClass(CharacterClass::WARRIOR), m_name("DefaultPlayer"), m_level(1), 
+    : m_characterClass(CharacterClass::SOLO), m_name("DefaultPlayer"), m_level(1),
       m_health(100), m_mana(50), m_maxHealth(100), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
-      m_x(0.0f), m_y(0.0f), m_startX(0.0f), m_startY(0.0f), m_targetX(0.0f), m_targetY(0.0f), 
-      m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(4.0f), m_textureIndex(-1) {
-    // Initialize with default values
+      m_experience(0), m_gold(0),
+      m_x(0.0f), m_y(0.0f), m_startX(0.0f), m_startY(0.0f), m_targetX(0.0f), m_targetY(0.0f),
+      m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(8.0f), m_textureIndex(-1) {
+    initializeStats();
+    refreshAbilities();
 }
 
 Player::~Player() {}
+
+bool Player::consumeStepCompleted() {
+    bool completed = m_stepCompleted;
+    m_stepCompleted = false;
+    return completed;
+}
 
 bool Player::initialize() {
     // For now, we'll just print a message
@@ -46,6 +82,7 @@ void Player::update(float deltaTime) {
             m_y = m_targetY;
             m_isMoving = false;
             m_moveProgress = 0.0f;
+            m_stepCompleted = true;
         } else {
             // Linear interpolation between start and target
             m_x = m_startX + (m_targetX - m_startX) * m_moveProgress;
@@ -59,21 +96,14 @@ void Player::loadTexture(VulkanRenderer* renderer) {
     if (!renderer) return;
     
     std::string base = renderer->getAssetsBasePath();
-    std::string texturePath;
-    
-    // Load texture based on character class
-    switch (m_characterClass) {
-        case CharacterClass::MAGE:
-            texturePath = base + "/mage.png";
-            break;
-        case CharacterClass::WARRIOR:
-            texturePath = base + "/warrior.png";
-            break;
-        case CharacterClass::ROGUE:
-            texturePath = base + "/rogue.png";
-            break;
-    }
-    
+
+    // Asset filename is the lowercased class name, e.g. "netrunner.png".
+    std::string className = classToString(m_characterClass);
+    std::transform(className.begin(), className.end(), className.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    std::string texturePath = base + "/characters/" + className + ".png";
+
+
     if (std::filesystem::exists(texturePath)) {
         m_textureIndex = renderer->loadTexture(texturePath);
         std::cout << "Loaded player texture: " << texturePath << " (index: " << m_textureIndex << ")" << std::endl;
@@ -101,7 +131,7 @@ void Player::render() {
 void Player::initializeStats() {
     // Initialize stats based on character class
     switch (m_characterClass) {
-        case CharacterClass::MAGE:
+        case CharacterClass::NETRUNNER:
             m_magic += 15;
             m_mana = 100;
             m_maxMana = 100;
@@ -109,7 +139,7 @@ void Player::initializeStats() {
             m_maxHealth = 80;
             m_defense = 5;
             break;
-        case CharacterClass::WARRIOR:
+        case CharacterClass::SOLO:
             m_strength += 15;
             m_health = 150;
             m_maxHealth = 150;
@@ -117,7 +147,7 @@ void Player::initializeStats() {
             m_maxMana = 30;
             m_defense = 15;
             break;
-        case CharacterClass::ROGUE:
+        case CharacterClass::INFILTRATOR:
             m_speed += 15;
             m_strength += 5;
             m_health = 90;
@@ -128,23 +158,18 @@ void Player::initializeStats() {
             m_defense = 8;
             break;
     }
-    
-    std::cout << "Created " << m_name << " the ";
-    switch (m_characterClass) {
-        case CharacterClass::MAGE: std::cout << "Mage"; break;
-        case CharacterClass::WARRIOR: std::cout << "Warrior"; break;
-        case CharacterClass::ROGUE: std::cout << "Rogue"; break;
-    }
-    std::cout << " with stats: HP=" << m_health << "/" << m_maxHealth << ", MP=" << m_mana << "/" << m_maxMana
+
+    std::cout << "Created " << m_name << " the " << classToString(m_characterClass)
+              << " with stats: HP=" << m_health << "/" << m_maxHealth << ", MP=" << m_mana << "/" << m_maxMana
               << ", STR=" << m_strength << ", MAG=" << m_magic 
               << ", SPD=" << m_speed << ", DEF=" << m_defense << std::endl;
 }
 
 void Player::takeDamage(int damage) {
-    int actualDamage = (std::max)(0, damage - m_defense / 2);
+    int actualDamage = computeMitigatedDamage(damage, getEffectiveDefense());
     m_health -= actualDamage;
     m_health = (std::max)(0, m_health);
-    
+
     std::cout << m_name << " took " << actualDamage << " damage. HP: " << m_health << "/" << m_maxHealth << std::endl;
 }
 
@@ -172,25 +197,13 @@ void Player::removeItem(const Item* item) {
     }
 }
 
-void Player::addSpell(std::shared_ptr<Spell> spell) {
-    if (m_characterClass == CharacterClass::MAGE) {
-        std::cout << m_name << " learned spell: " << spell->getName() << std::endl;
-        m_spells.push_back(std::move(spell));
-    } else {
-        std::cout << m_name << " cannot learn spells!" << std::endl;
+void Player::refreshAbilities() {
+    for (const Ability* ability : AbilityRegistry::unlockedFor(m_characterClass, m_level)) {
+        if (!knowsAbility(ability)) {
+            learnAbility(ability);
+            std::cout << m_name << " learned " << ability->getName() << "!" << std::endl;
+        }
     }
-}
-
-bool Player::canCastSpells() const {
-    return m_characterClass == CharacterClass::MAGE;
-}
-
-bool Player::canSteal() const {
-    return m_characterClass == CharacterClass::ROGUE;
-}
-
-bool Player::hasCriticalStrike() const {
-    return m_characterClass == CharacterClass::ROGUE;
 }
 
 void Player::levelUp() {
@@ -198,7 +211,7 @@ void Player::levelUp() {
     
     // Increase stats based on character class
     switch (m_characterClass) {
-        case CharacterClass::MAGE:
+        case CharacterClass::NETRUNNER:
             m_maxHealth += 10;
             m_health = m_maxHealth;  // Full heal
             m_maxMana += 20;
@@ -206,7 +219,7 @@ void Player::levelUp() {
             m_magic += 3;
             m_defense += 1;
             break;
-        case CharacterClass::WARRIOR:
+        case CharacterClass::SOLO:
             m_maxHealth += 20;
             m_health = m_maxHealth;  // Full heal
             m_maxMana += 5;
@@ -214,7 +227,7 @@ void Player::levelUp() {
             m_strength += 3;
             m_defense += 2;
             break;
-        case CharacterClass::ROGUE:
+        case CharacterClass::INFILTRATOR:
             m_maxHealth += 15;
             m_health = m_maxHealth;  // Full heal
             m_maxMana += 10;
@@ -226,6 +239,7 @@ void Player::levelUp() {
     }
     
     std::cout << m_name << " leveled up to level " << m_level << "!" << std::endl;
+    refreshAbilities();
 }
 
 void Player::move(float dx, float dy, Map* map) {
@@ -269,4 +283,65 @@ void Player::moveLeft(Map* map) {
 
 void Player::moveRight(Map* map) {
     move(1.0f, 0.0f, map);
+}
+
+int Player::getExperienceToNextLevel() const {
+    // XP curve: 100 * level^1.5, rounded.
+    return static_cast<int>(100.0 * std::pow(static_cast<float>(m_level), 1.5f));
+}
+
+void Player::addExperience(int exp) {
+    if (exp <= 0) return;
+    m_experience += exp;
+    std::cout << m_name << " gained " << exp << " XP. Total: " << m_experience
+              << "/" << getExperienceToNextLevel() << std::endl;
+    while (m_experience >= getExperienceToNextLevel()) {
+        m_experience -= getExperienceToNextLevel();
+        levelUp();
+    }
+}
+
+bool Player::spendGold(int amount) {
+    if (m_gold < amount) {
+        std::cout << m_name << " doesn't have enough gold (" << m_gold << "/" << amount << ")" << std::endl;
+        return false;
+    }
+    m_gold -= amount;
+    return true;
+}
+
+int Player::getEquipmentAttackBonus() const {
+    return m_equippedWeapon ? m_equippedWeapon->getAttackBonus() : 0;
+}
+
+int Player::getEquipmentDefenseBonus() const {
+    return m_equippedArmor ? m_equippedArmor->getDefenseBonus() : 0;
+}
+
+void Player::equipWeapon(std::unique_ptr<Item> weapon) {
+    if (!weapon) return;
+    if (weapon->getType() != Item::ItemType::WEAPON) {
+        std::cout << weapon->getName() << " is not a weapon!" << std::endl;
+        return;
+    }
+    m_equippedWeapon = std::move(weapon);
+    std::cout << m_name << " equipped " << m_equippedWeapon->getName() << std::endl;
+}
+
+void Player::equipArmor(std::unique_ptr<Item> armor) {
+    if (!armor) return;
+    if (armor->getType() != Item::ItemType::ARMOR) {
+        std::cout << armor->getName() << " is not armor!" << std::endl;
+        return;
+    }
+    m_equippedArmor = std::move(armor);
+    std::cout << m_name << " equipped " << m_equippedArmor->getName() << std::endl;
+}
+
+std::unique_ptr<Item> Player::unequipWeapon() {
+    return std::move(m_equippedWeapon);
+}
+
+std::unique_ptr<Item> Player::unequipArmor() {
+    return std::move(m_equippedArmor);
 }

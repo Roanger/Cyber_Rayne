@@ -1,5 +1,7 @@
 #include "../../include/CharacterSelectionSystem.h"
 #include "../../include/Player.h"
+#include <algorithm>
+#include <cctype>
 #include <iostream>
 #include <filesystem>
 
@@ -45,21 +47,21 @@ void CharacterSelectionSystem::loadTextures(VulkanRenderer* renderer) {
         std::cerr << "Character selection cursor not found: " << cursorPath << std::endl;
     }
     
-    // Load character textures
-    std::vector<std::string> charTextures = {
-        base + "/mage.png",
-        base + "/warrior.png", 
-        base + "/rogue.png"
-    };
-    
-    for (size_t i = 0; i < m_characterOptions.size() && i < charTextures.size(); ++i) {
-        if (std::filesystem::exists(charTextures[i])) {
-            m_characterOptions[i].textureIndex = renderer->loadTexture(charTextures[i]);
-            std::cout << "Loaded character texture " << i << ": " << charTextures[i] 
-                      << " (index: " << m_characterOptions[i].textureIndex << ")" << std::endl;
+    // Derive each portrait from its own class rather than a positional list,
+    // so reordering the options cannot silently mismatch the art.
+    for (auto& option : m_characterOptions) {
+        std::string className = Player::classToString(option.charClass);
+        std::transform(className.begin(), className.end(), className.begin(),
+                       [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        std::string texturePath = base + "/characters/" + className + ".png";
+
+        if (std::filesystem::exists(texturePath)) {
+            option.textureIndex = renderer->loadTexture(texturePath);
+            std::cout << "Loaded character texture: " << texturePath
+                      << " (index: " << option.textureIndex << ")" << std::endl;
         } else {
-            m_characterOptions[i].textureIndex = -1;
-            std::cerr << "Character texture not found: " << charTextures[i] << std::endl;
+            option.textureIndex = -1;
+            std::cerr << "Character texture not found: " << texturePath << std::endl;
         }
     }
 }
@@ -113,9 +115,9 @@ void CharacterSelectionSystem::confirmSelection() {
 
 #ifndef NO_VULKAN
 void CharacterSelectionSystem::render(VulkanRenderer* renderer) {
-    // Screen dimensions (1920x1080)
-    const int screenW = 1920;
-    const int screenH = 1080;
+    // Screen dimensions from swapchain
+    const int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
+    const int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
     
     // Render background
     if (m_backgroundTextureIndex >= 0) {
@@ -209,32 +211,33 @@ const std::string& CharacterSelectionSystem::getStarterQuestForSelectedCharacter
 void CharacterSelectionSystem::initializeCharacterOptions() {
     m_characterOptions.clear();
     
-    // Mage character
-    CharacterOption mage;
-    mage.charClass = Player::CharacterClass::MAGE;
-    mage.name = "Elara";
-    mage.description = "A powerful spellcaster who harnesses the elements.\n\nStrengths: High magic power, powerful spells\nWeaknesses: Low health, fragile in melee combat";
-    mage.starterQuest = "Investigate the mysterious magical disturbances in the Whispering Woods. The ancient trees seem to be losing their magic, and the local villagers are worried. Find the source of the disturbance and restore balance to the forest.";
-    mage.textureIndex = -1;
-    m_characterOptions.push_back(mage);
-    
-    // Warrior character
-    CharacterOption warrior;
-    warrior.charClass = Player::CharacterClass::WARRIOR;
-    warrior.name = "Thorn";
-    warrior.description = "A strong warrior skilled in melee combat.\n\nStrengths: High health, strong physical attacks\nWeaknesses: Low magic power, slow movement";
-    warrior.starterQuest = "The mining town of Ironhold is under threat from a pack of fierce wolves that have been driven mad by dark magic. Help the townspeople defend their home and find the source of the corruption.";
-    warrior.textureIndex = -1;
-    m_characterOptions.push_back(warrior);
-    
-    // Rogue character
-    CharacterOption rogue;
-    rogue.charClass = Player::CharacterClass::ROGUE;
-    rogue.name = "Shadow";
-    rogue.description = "A nimble rogue who excels in stealth and speed.\n\nStrengths: High speed, critical strikes, stealth abilities\nWeaknesses: Moderate health, limited magic";
-    rogue.starterQuest = "The merchant caravan that was supposed to deliver supplies to the frontier settlement of New Haven never arrived. Investigate what happened to the caravan and recover the lost supplies.";
-    rogue.textureIndex = -1;
-    m_characterOptions.push_back(rogue);
-    
+    // Option order must stay in sync with the texture path list in
+    // loadTextures() — that list is indexed positionally, not by charClass.
+
+    CharacterOption netrunner;
+    netrunner.charClass = Player::CharacterClass::NETRUNNER;
+    netrunner.name = "Cipher";
+    netrunner.description = "A netrunner who turns hostile code into a weapon.\n\nStrengths: High tech power, breaches and disables machines\nWeaknesses: Low health, little use in a straight fight";
+    netrunner.starterQuest = "Something is scraping the district's public net and rerouting it through a dead corporate relay. Trace the intrusion back through Neo-Kyoto Central and find out who is listening.";
+    netrunner.textureIndex = -1;
+    m_characterOptions.push_back(netrunner);
+
+    CharacterOption solo;
+    solo.charClass = Player::CharacterClass::SOLO;
+    solo.name = "Rook";
+    solo.description = "Street muscle wrapped in chrome and armor plate.\n\nStrengths: High health, heavy physical damage, holds a line\nWeaknesses: Low tech power, no answer to ranged threats";
+    solo.starterQuest = "A crew of thugs has been shaking down vendors along the Central strip and the local fixers are done paying. Push them off the block and find out who is bankrolling them.";
+    solo.textureIndex = -1;
+    m_characterOptions.push_back(solo);
+
+    CharacterOption infiltrator;
+    infiltrator.charClass = Player::CharacterClass::INFILTRATOR;
+    infiltrator.name = "Wisp";
+    infiltrator.description = "A ghost who moves through security like it isn't there.\n\nStrengths: High speed, opening strikes, poisons and debuffs\nWeaknesses: Moderate health, fades in a long fight";
+    infiltrator.starterQuest = "A courier went dark in Neon Alley with a data chip still on them. Get in past the gangs, find the body before corporate security does, and get the chip out.";
+    infiltrator.textureIndex = -1;
+    m_characterOptions.push_back(infiltrator);
+
+
     std::cout << "Initialized " << m_characterOptions.size() << " character options" << std::endl;
 }

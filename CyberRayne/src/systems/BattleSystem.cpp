@@ -3,7 +3,8 @@
 #include "../../include/Player.h"
 #include "../../include/Enemy.h"
 #include "../../include/Combatant.h"
-#include "../../include/Spell.h"
+#include "../../include/Ability.h"
+#include "../../include/AbilityRegistry.h"
 #include "../../include/Item.h"
 #include "../../include/StatusEffect.h"
 #include <iostream>
@@ -15,6 +16,10 @@ namespace {
 // Scale speed to a reasonable ATB fill rate.
 // 100 speed ~= 5 seconds to fill the gauge (at 60 FPS ~ 300 frames).
 constexpr float ATB_FILL_BASE = 0.005f;
+
+// Percent chance an enemy with an affordable ability uses it instead of a
+// basic attack.
+constexpr int ENEMY_ABILITY_CHANCE = 40;
 
 int rollFleeChance() {
     static std::mt19937 rng(static_cast<unsigned>(std::random_device{}()));
@@ -28,7 +33,9 @@ BattleSystem::BattleSystem(Party* party)
     : m_party(party),
       m_currentActor(nullptr),
       m_state(State::FILLING_GAUGES),
-      m_battleResult(BattleResult::ONGOING) {}
+      m_battleResult(BattleResult::ONGOING),
+      m_expEarned(0),
+      m_goldEarned(0) {}
 
 BattleSystem::~BattleSystem() = default;
 
@@ -36,6 +43,11 @@ void BattleSystem::startBattle(const std::vector<std::unique_ptr<Enemy>>& enemie
     m_battleResult = BattleResult::ONGOING;
     m_state = State::FILLING_GAUGES;
     m_currentActor = nullptr;
+    m_expEarned = 0;
+    m_goldEarned = 0;
+    m_lastRejection.clear();
+    // Stale pointers here would leak into the next battle's reward dedupe.
+    m_rewardedEnemies.clear();
     while (!m_readyQueue.empty()) {
         m_readyQueue.pop();
     }
@@ -63,6 +75,11 @@ void BattleSystem::buildCombatantList(const std::vector<std::unique_ptr<Enemy>>&
         if (enemy && enemy->isAlive()) {
             enemy->resetAtb();
             enemy->setDefending(false);
+            // Grant the kit for this enemy type. learnAbility is idempotent,
+            // so re-entering battle with the same enemy is harmless.
+            for (const Ability* ability : AbilityRegistry::forEnemy(enemy->getName())) {
+                enemy->learnAbility(ability);
+            }
             m_combatants.push_back(enemy.get());
             m_enemyCombatants.push_back(enemy.get());
         }
@@ -87,14 +104,17 @@ void BattleSystem::update(float deltaTime) {
             continue;
         }
 
-        if (!combatant->isAtbFull()) {
+        bool wasFull = combatant->isAtbFull();
+        if (!wasFull) {
             float fill = ATB_FILL_BASE * static_cast<float>(combatant->getSpeed()) * deltaTime;
-            // Apply slow/status modifiers here if needed.
+            fill *= combatant->getAtbSpeedMultiplier();  // SLOW
             combatant->fillAtb(fill);
-        }
 
-        if (combatant->isAtbFull()) {
-            m_readyQueue.push(combatant);
+            // Enqueue only on the transition to full. Pushing every frame while
+            // a combatant waits to act floods the queue with duplicates.
+            if (combatant->isAtbFull()) {
+                m_readyQueue.push(combatant);
+            }
         }
     }
 
@@ -133,6 +153,13 @@ void BattleSystem::processReadyCombatants() {
     // Reset defending flag at the start of a new turn.
     actor->setDefending(false);
 
+    // A stunned combatant forfeits the turn it just earned.
+    if (actor->isStunned()) {
+        std::cout << actor->getName() << " is stunned and loses the turn!" << std::endl;
+        actor->resetAtb();
+        return;
+    }
+
     if (actor->isPlayer()) {
         m_currentActor = actor;
         m_state = State::WAITING_PLAYER_ACTION;
@@ -145,13 +172,106 @@ void BattleSystem::processReadyCombatants() {
     }
 }
 
-bool BattleSystem::submitPlayerAction(BattleAction action, int selectionIndex) {
+BattleSystem::ActionRequest BattleSystem::ActionRequest::attack(int targetIndex) {
+    ActionRequest r;
+    r.action = BattleAction::ATTACK;
+    r.targetIndex = targetIndex;
+    return r;
+}
+
+BattleSystem::ActionRequest BattleSystem::ActionRequest::ability(int abilityIndex, int targetIndex) {
+    ActionRequest r;
+    r.action = BattleAction::ABILITY;
+    r.abilityIndex = abilityIndex;
+    r.targetIndex = targetIndex;
+    return r;
+}
+
+BattleSystem::ActionRequest BattleSystem::ActionRequest::item(int itemIndex, int targetIndex) {
+    ActionRequest r;
+    r.action = BattleAction::ITEM;
+    r.itemIndex = itemIndex;
+    r.targetIndex = targetIndex;
+    return r;
+}
+
+BattleSystem::ActionRequest BattleSystem::ActionRequest::defend() {
+    ActionRequest r;
+    r.action = BattleAction::DEFEND;
+    return r;
+}
+
+BattleSystem::ActionRequest BattleSystem::ActionRequest::flee() {
+    ActionRequest r;
+    r.action = BattleAction::FLEE;
+    return r;
+}
+
+std::vector<Combatant*> BattleSystem::getLivingEnemies() const {
+    std::vector<Combatant*> living;
+    for (Combatant* c : m_enemyCombatants) {
+        if (c && c->isAlive()) living.push_back(c);
+    }
+    return living;
+}
+
+std::vector<Combatant*> BattleSystem::getLivingAllies() const {
+    std::vector<Combatant*> living;
+    for (Combatant* c : m_combatants) {
+        if (c && c->isPlayer() && c->isAlive()) living.push_back(c);
+    }
+    return living;
+}
+
+bool BattleSystem::submitPlayerAction(BattleAction action) {
+    ActionRequest request;
+    request.action = action;
+    return submitPlayerAction(request);
+}
+
+bool BattleSystem::submitPlayerAction(const ActionRequest& request) {
+    m_lastRejection.clear();
+
     if (m_state != State::WAITING_PLAYER_ACTION || !m_currentActor || !m_currentActor->isPlayer()) {
+        m_lastRejection = "No character is waiting for a command.";
         return false;
     }
 
+    // Validate before committing the turn. The old code reset the ATB gauge
+    // first and spent mana inside the cast, so an unaffordable ability burned
+    // the turn for nothing.
+    if (request.action == BattleAction::ABILITY) {
+        const auto& abilities = m_currentActor->getAbilities();
+        if (request.abilityIndex < 0 || request.abilityIndex >= static_cast<int>(abilities.size())) {
+            m_lastRejection = "That ability does not exist.";
+            return false;
+        }
+        const Ability* ability = abilities[request.abilityIndex];
+        if (!ability) {
+            m_lastRejection = "That ability does not exist.";
+            return false;
+        }
+        if (!ability->canAfford(m_currentActor)) {
+            m_lastRejection = "Not enough MP for " + ability->getName() + ".";
+            std::cout << m_currentActor->getName() << " lacks the MP for "
+                      << ability->getName() << "." << std::endl;
+            return false;
+        }
+        if (resolveTargets(m_currentActor, *ability, request.targetIndex).empty()) {
+            m_lastRejection = "No valid target.";
+            return false;
+        }
+    } else if (request.action == BattleAction::ITEM) {
+        Player* player = static_cast<Player*>(m_currentActor);
+        const auto& items = player->getInventory();
+        if (request.itemIndex < 0 || request.itemIndex >= static_cast<int>(items.size())) {
+            m_lastRejection = "That item does not exist.";
+            return false;
+        }
+    }
+
     m_state = State::EXECUTING;
-    executePlayerAction(m_currentActor, action, selectionIndex);
+    executePlayerAction(m_currentActor, request);
 
     m_currentActor->resetAtb();
     m_currentActor = nullptr;
@@ -162,6 +282,56 @@ bool BattleSystem::submitPlayerAction(BattleAction action, int selectionIndex) {
     return true;
 }
 
+std::vector<Combatant*> BattleSystem::resolveTargets(Combatant* actor, const Ability& ability,
+                                                     int targetIndex) const {
+    std::vector<Combatant*> targets;
+    if (!actor) {
+        return targets;
+    }
+
+    // "Enemy" is relative to the actor, so the same ability data works for
+    // party members and for enemies using it against the party.
+    const bool actorIsPlayer = actor->isPlayer();
+    std::vector<Combatant*> foes;
+    std::vector<Combatant*> friends;
+    for (Combatant* c : m_combatants) {
+        if (!c || !c->isAlive()) continue;
+        if (c->isPlayer() == actorIsPlayer) {
+            friends.push_back(c);
+        } else {
+            foes.push_back(c);
+        }
+    }
+
+    auto pick = [targetIndex](const std::vector<Combatant*>& side) -> std::vector<Combatant*> {
+        if (side.empty()) return {};
+        if (targetIndex >= 0 && targetIndex < static_cast<int>(side.size())) {
+            return {side[targetIndex]};
+        }
+        return {side.front()};
+    };
+
+    switch (ability.getTarget()) {
+        case Ability::Target::SELF:
+            targets.push_back(actor);
+            break;
+        case Ability::Target::SINGLE_ENEMY:
+            targets = pick(foes);
+            break;
+        case Ability::Target::ALL_ENEMIES:
+            targets = foes;
+            break;
+        case Ability::Target::SINGLE_ALLY:
+            targets = pick(friends);
+            break;
+        case Ability::Target::ALL_ALLIES:
+            targets = friends;
+            break;
+    }
+
+    return targets;
+}
+
 void BattleSystem::executeEnemyTurn(Combatant* enemy) {
     if (!enemy || !enemy->isAlive()) {
         return;
@@ -169,51 +339,68 @@ void BattleSystem::executeEnemyTurn(Combatant* enemy) {
 
     std::cout << "--- " << enemy->getName() << "'s turn ---" << std::endl;
 
-    // Simple AI: attack the first living party member.
-    // More advanced enemies could use decideAction()/spells later.
+    // Use an affordable ability when one is available, otherwise attack.
+    // Abilities run through the same path players use.
+    std::vector<const Ability*> usable;
+    for (const Ability* ability : enemy->getAbilities()) {
+        if (ability && ability->canAfford(enemy)) {
+            usable.push_back(ability);
+        }
+    }
+
+    const bool useAbility = !usable.empty() && (std::rand() % 100) < ENEMY_ABILITY_CHANCE;
+    if (useAbility) {
+        const Ability* chosen = usable[std::rand() % usable.size()];
+        auto targets = resolveTargets(enemy, *chosen, -1);
+        if (!targets.empty()) {
+            chosen->payCost(enemy);
+            chosen->execute(enemy, targets);
+            return;
+        }
+    }
+
     Combatant* target = getFirstLivingPlayer();
     if (target) {
         executeAttack(enemy, target);
     }
 }
 
-void BattleSystem::executePlayerAction(Combatant* actor, BattleAction action, int selectionIndex) {
+void BattleSystem::executePlayerAction(Combatant* actor, const ActionRequest& request) {
     if (!actor || !actor->isAlive()) {
         return;
     }
 
     std::cout << "--- " << actor->getName() << "'s turn ---" << std::endl;
 
-    switch (action) {
+    switch (request.action) {
         case BattleAction::ATTACK: {
-            Combatant* target = getFirstLivingEnemy();
+            auto foes = getLivingEnemies();
+            Combatant* target = nullptr;
+            if (request.targetIndex >= 0 && request.targetIndex < static_cast<int>(foes.size())) {
+                target = foes[request.targetIndex];
+            } else if (!foes.empty()) {
+                target = foes.front();
+            }
             if (target) {
                 executeAttack(actor, target);
             }
             break;
         }
-        case BattleAction::MAGIC: {
-            Player* player = static_cast<Player*>(actor);
-            const auto& spells = player->getSpells();
-            if (selectionIndex < 0 || selectionIndex >= static_cast<int>(spells.size())) {
-                std::cout << "Invalid spell selection." << std::endl;
-                return;
-            }
-            Spell* spell = spells[selectionIndex].get();
-            Combatant* target = selectAutoTarget(actor, spell);
-            if (target) {
-                executeMagic(actor, selectionIndex, target);
-            }
+        case BattleAction::ABILITY: {
+            // Already validated in submitPlayerAction, including affordability.
+            const Ability* ability = actor->getAbilities()[request.abilityIndex];
+            auto targets = resolveTargets(actor, *ability, request.targetIndex);
+            ability->payCost(actor);
+            ability->execute(actor, targets);
             break;
         }
         case BattleAction::ITEM: {
-            Player* player = static_cast<Player*>(actor);
-            const auto& items = player->getInventory();
-            if (selectionIndex < 0 || selectionIndex >= static_cast<int>(items.size())) {
-                std::cout << "Invalid item selection." << std::endl;
-                return;
+            auto allies = getLivingAllies();
+            Combatant* target = actor;
+            if (request.targetIndex >= 0 && request.targetIndex < static_cast<int>(allies.size())) {
+                target = allies[request.targetIndex];
             }
-            executeItem(actor, selectionIndex, actor);
+            executeItem(actor, request.itemIndex, target);
             break;
         }
         case BattleAction::DEFEND:
@@ -230,12 +417,9 @@ void BattleSystem::executeAttack(Combatant* actor, Combatant* target) {
         return;
     }
 
-    int baseDamage = actor->getStrength();
-    if (actor->isPlayer()) {
-        // TODO: weapon damage can be added here.
-    }
-
-    int damage = baseDamage;
+    // Effective strength folds in the equipped weapon and any attack buff or
+    // debuff. Defense is applied by the target inside takeDamage().
+    int damage = actor->getEffectiveStrength();
     if (target->isDefending()) {
         damage = damage / 2;
     }
@@ -243,16 +427,6 @@ void BattleSystem::executeAttack(Combatant* actor, Combatant* target) {
     std::cout << actor->getName() << " attacks " << target->getName()
               << " for " << damage << " damage!" << std::endl;
     target->takeDamage(damage);
-}
-
-void BattleSystem::executeMagic(Combatant* actor, int spellIndex, Combatant* target) {
-    Player* player = static_cast<Player*>(actor);
-    Spell* spell = player->getSpells()[spellIndex].get();
-    if (target->isEnemy()) {
-        spell->cast(player, static_cast<Enemy*>(target));
-    } else {
-        spell->cast(player, static_cast<Player*>(target));
-    }
 }
 
 void BattleSystem::executeItem(Combatant* actor, int itemIndex, Combatant* target) {
@@ -278,17 +452,6 @@ void BattleSystem::executeFlee() {
     }
 }
 
-Combatant* BattleSystem::selectAutoTarget(Combatant* actor, Spell* spell) const {
-    if (!spell) {
-        return nullptr;
-    }
-    Spell::SpellType type = spell->getType();
-    if (type == Spell::SpellType::HEAL || type == Spell::SpellType::BUFF) {
-        return actor;
-    }
-    return getFirstLivingEnemy();
-}
-
 Combatant* BattleSystem::getFirstLivingEnemy() const {
     for (auto* enemy : m_enemyCombatants) {
         if (enemy && enemy->isAlive()) {
@@ -311,6 +474,19 @@ Combatant* BattleSystem::getFirstLivingPlayer() const {
 }
 
 void BattleSystem::removeDefeatedEnemies() {
+    // Collect rewards from enemies that are about to be removed.
+    for (auto* combatant : m_enemyCombatants) {
+        if (combatant && !combatant->isAlive()) {
+            // Only count each enemy once.
+            if (std::find(m_rewardedEnemies.begin(), m_rewardedEnemies.end(), combatant) == m_rewardedEnemies.end()) {
+                auto* enemy = static_cast<Enemy*>(combatant);
+                m_expEarned += enemy->getExperienceReward();
+                m_goldEarned += enemy->getGoldReward();
+                m_rewardedEnemies.push_back(combatant);
+            }
+        }
+    }
+
     auto removeIfDead = [](Combatant* c) { return !c || !c->isAlive(); };
     m_enemyCombatants.erase(
         std::remove_if(m_enemyCombatants.begin(), m_enemyCombatants.end(), removeIfDead),
@@ -339,5 +515,21 @@ void BattleSystem::checkBattleEnd() {
         m_battleResult = BattleResult::PLAYER_WIN;
         m_state = State::ENDED;
         std::cout << "Victory!" << std::endl;
+
+        // Award XP and gold to all living party members.
+        if (m_party && m_expEarned > 0) {
+            int share = m_expEarned / m_party->countAlive();
+            int remainder = m_expEarned % m_party->countAlive();
+            int memberIndex = 0;
+            for (const auto& member : m_party->getMembers()) {
+                if (member && member->isAlive()) {
+                    int award = share + (memberIndex == 0 ? remainder : 0);
+                    member->addExperience(award);
+                    member->addGold(m_goldEarned / m_party->countAlive());
+                    ++memberIndex;
+                }
+            }
+            std::cout << "Party earned " << m_expEarned << " XP and " << m_goldEarned << " gold!" << std::endl;
+        }
     }
 }

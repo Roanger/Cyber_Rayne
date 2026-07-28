@@ -7,9 +7,16 @@
 #include "../../include/BattleSystem.h"
 #include "../../include/Map.h"
 #include "../../include/MenuSystem.h"
+#include "../../include/AudioManager.h"
+#include "../../include/InputConfig.h"
+#include "../../include/SaveSystem.h"
+#include "../../include/QuestLog.h"
+#include "../../include/ContentFactory.h"
+#include <cstdlib>
 #include <iostream>
+#include <string>
 
-GameState::GameState() : m_currentState(State::MENU), m_world(nullptr), m_party(nullptr), m_charSelectionSystem(nullptr), m_battleSystem(nullptr), m_menuSystem(nullptr), m_uiManager(nullptr), m_renderer(nullptr) {}
+GameState::GameState() : m_currentState(State::MENU), m_world(nullptr), m_party(nullptr), m_charSelectionSystem(nullptr), m_battleSystem(nullptr), m_menuSystem(nullptr), m_uiManager(nullptr), m_audioManager(nullptr), m_inputConfig(nullptr), m_saveSystem(nullptr), m_questLog(nullptr), m_renderer(nullptr) {}
 
 GameState::~GameState() = default;
 
@@ -74,11 +81,49 @@ bool GameState::initialize() {
     // Initialize UI Manager
     m_uiManager = std::make_unique<UIManager>();
     
+    // Initialize audio manager
+    m_audioManager = std::make_unique<AudioManager>();
+    if (!m_audioManager->initialize()) {
+        std::cerr << "Failed to initialize audio manager!" << std::endl;
+        // Non-fatal — audio is optional
+    }
+
+    // Initialize input config with default bindings
+    m_inputConfig = std::make_unique<InputConfig>();
+
+    // Initialize save system
+    m_saveSystem = std::make_unique<SaveSystem>();
+
+    // Initialize quest log
+    m_questLog = std::make_unique<QuestLog>();
+    ContentFactory::createQuestChain(m_questLog.get());
+
+    // Dev shortcut: CYBERRAYNE_START=world drops straight into exploration with
+    // the default party, so exploration and combat can be exercised without
+    // clicking through the menus on every run. Deferred to the first update()
+    // because the renderer is attached after initialize() returns, and
+    // startNewGame() needs it to load map and character textures.
+    if (const char* start = std::getenv("CYBERRAYNE_START")) {
+        m_pendingDevStart = (std::string(start) == "world");
+    }
+
     std::cout << "Game state initialized successfully." << std::endl;
     return true;
 }
 
 void GameState::update(float deltaTime) {
+    if (m_pendingDevStart) {
+        m_pendingDevStart = false;
+        std::cout << "CYBERRAYNE_START=world — skipping menus." << std::endl;
+        // Commit a character choice first; startNewGame() builds Rayne from the
+        // selection and would otherwise produce a party missing its leader.
+        if (m_charSelectionSystem) {
+            m_charSelectionSystem->selectCharacter(1);  // Solo
+            m_charSelectionSystem->confirmSelection();
+        }
+        startNewGame();
+    }
+
     switch (m_currentState) {
         case State::MENU:
             // Handle menu logic
@@ -93,8 +138,8 @@ void GameState::update(float deltaTime) {
                             m_menuSystem->resetSelection();
                             break;
                         case MenuSystem::MenuItem::LOAD_GAME:
-                            std::cout << "Load game selected - Feature coming soon!" << std::endl;
-                            // Placeholder for load game logic
+                            std::cout << "Load game selected." << std::endl;
+                            loadGame();
                             m_menuSystem->resetSelection();
                             break;
                         case MenuSystem::MenuItem::SETTINGS:
@@ -112,113 +157,74 @@ void GameState::update(float deltaTime) {
             }
             break;
         case State::CHARACTER_SELECTION:
-            // Handle character selection logic
-            // Wait for player to select a character using handleInput
             if (m_charSelectionSystem) {
                 m_charSelectionSystem->update(deltaTime);
                 
-                // Check if character was selected (via Enter key in handleInput)
                 if (m_charSelectionSystem->isCharacterSelected()) {
-                    // Create the party with Rayne's class chosen in character selection.
-                    m_party = std::make_unique<Party>();
-                    auto rayne = m_charSelectionSystem->createSelectedCharacter();
-                    if (rayne) {
-                        rayne->setName("Rayne");
-                        rayne->initialize();
-                        if (m_renderer) {
-                            rayne->loadTexture(m_renderer);
-                        }
-                        m_party->addMember(std::move(rayne));
-                    }
-
-                    // Add the fixed companions for the vertical slice.
-                    auto cyph = std::make_unique<Player>(Player::CharacterClass::MAGE, "Cyph");
-                    cyph->initialize();
-                    if (m_renderer) {
-                        cyph->loadTexture(m_renderer);
-                    }
-                    m_party->addMember(std::move(cyph));
-
-                    auto vash = std::make_unique<Player>(Player::CharacterClass::ROGUE, "Vash");
-                    vash->initialize();
-                    if (m_renderer) {
-                        vash->loadTexture(m_renderer);
-                    }
-                    m_party->addMember(std::move(vash));
-
-                    // Initialize world after character selection
-                    m_world = std::make_unique<World>();
-                    if (m_world->initialize()) {
-                        m_world->setPlayer(m_party->getLeader());
-                        // Load map textures
-                        if (m_renderer) {
-                            m_world->loadMapTextures(m_renderer);
-                        }
-
-                        // Set player spawn position in the starting village (on grass, south of house)
-                        if (m_party->getLeader()) {
-                            m_party->getLeader()->setPosition(15.0f, 16.0f);
-                        }
-                    }
-
-                    // Move to world exploration state
-                    m_currentState = State::WORLD_EXPLORATION;
+                    startNewGame();
                 }
             }
             break;
         case State::WORLD_EXPLORATION:
+            // Update party members first so movement completes before transition check
+            if (m_party) {
+                for (const auto& member : m_party->getMembers()) {
+                    if (member) {
+                        member->update(deltaTime);
+                    }
+                }
+            }
+
             // Handle world exploration logic
-            // Update world
             if (m_world) {
                 m_world->update(deltaTime);
-                
+
                 // Check for map transitions
                 m_world->checkMapTransition();
-                
-                // Check for enemy encounters
-                if (m_world->checkEnemyEncounter()) {
+
+                // Walking into a visible enemy, or a random ambush rolled on
+                // the step just completed. Either fills the world's active
+                // encounter, which the battle below consumes.
+                bool encountered = m_world->checkEnemyEncounter();
+
+                if (!encountered && m_party) {
+                    Player* leader = m_party->getMember(0);
+                    if (leader && leader->consumeStepCompleted()) {
+                        encountered = m_world->onPlayerStep();
+                    }
+                }
+
+                if (encountered) {
                     m_currentState = State::BATTLE;
                 }
             }
             break;
+        case State::PAUSED:
+            // Frozen — no world updates while paused.
+            break;
+        case State::GAME_OVER:
+            // Wait for player input to restart or quit.
+            break;
         case State::BATTLE:
             // Handle battle logic
-            if (!m_battleSystem && m_party && m_world && m_world->getCurrentMap()) {
+            if (!m_battleSystem && m_party && m_world && m_world->hasActiveEncounter()) {
                 // Create battle system
                 m_battleSystem = std::make_unique<BattleSystem>(m_party.get());
 
-                // Start battle with all enemies on the map
-                m_battleSystem->startBattle(m_world->getCurrentMap()->getEnemies());
+                // Fight only the enemies that triggered this encounter.
+                m_battleSystem->startBattle(m_world->getActiveEncounter());
             }
 
             if (m_battleSystem) {
+                // The UI now hands over a fully specified request, so there is
+                // nothing to translate between the two layers.
                 if (m_uiManager->hasActionSelected()) {
-                    const auto selectedAction = m_uiManager->getSelectedAction();
-                    BattleSystem::BattleAction action;
-                    switch (selectedAction) {
-                        case UIManager::BattleAction::ATTACK:
-                            action = BattleSystem::BattleAction::ATTACK;
-                            break;
-                        case UIManager::BattleAction::MAGIC:
-                            action = BattleSystem::BattleAction::MAGIC;
-                            break;
-                        case UIManager::BattleAction::ITEM:
-                            action = BattleSystem::BattleAction::ITEM;
-                            break;
-                        case UIManager::BattleAction::DEFEND:
-                            action = BattleSystem::BattleAction::DEFEND;
-                            break;
-                        case UIManager::BattleAction::FLEE:
-                            action = BattleSystem::BattleAction::FLEE;
-                            break;
-                        case UIManager::BattleAction::NONE:
-                            m_uiManager->resetAction();
-                            break;
+                    if (!m_battleSystem->submitPlayerAction(m_uiManager->getActionRequest())) {
+                        // Rejected actions leave the turn intact; surface why so
+                        // the player can pick something else.
+                        m_uiManager->setStatusMessage(m_battleSystem->getLastRejectionReason());
                     }
-                    if (selectedAction != UIManager::BattleAction::NONE) {
-                        m_battleSystem->submitPlayerAction(action, m_uiManager->getSelectedSpellIndex());
-                        m_uiManager->resetAction();
-                    }
+                    m_uiManager->resetAction();
                 }
                 m_battleSystem->update(deltaTime);
 
@@ -233,13 +239,13 @@ void GameState::update(float deltaTime) {
                     m_battleSystem.reset();
                     m_currentState = State::WORLD_EXPLORATION;
 
-                    // If player won, remove defeated enemies from the map
-                    if (result == BattleSystem::BattleResult::PLAYER_WIN) {
-                        if (m_world && m_world->getCurrentMap()) {
-                            m_world->getCurrentMap()->clearEnemies();
-                            m_world->spawnEnemies();
-                        }
+                    // Release the encounter group however the fight ended. The
+                    // enemies were already taken off the map when the encounter
+                    // began, so there is nothing left to retrigger on.
+                    if (m_world) {
+                        m_world->endEncounter();
                     }
+
                     // If player lost, transition to game over
                     if (result == BattleSystem::BattleResult::PLAYER_LOSE) {
                         m_currentState = State::GAME_OVER;
@@ -247,21 +253,6 @@ void GameState::update(float deltaTime) {
                 }
             }
             break;
-        case State::PAUSED:
-            // Handle paused state
-            break;
-        case State::GAME_OVER:
-            // Handle game over state
-            break;
-    }
-    
-    // Update party members if in world exploration state
-    if (m_currentState == State::WORLD_EXPLORATION && m_party) {
-        for (const auto& member : m_party->getMembers()) {
-            if (member) {
-                member->update(deltaTime);
-            }
-        }
     }
 }
 
@@ -319,37 +310,24 @@ void GameState::render(VulkanRenderer* renderer) {
     // Render party leader if in world exploration state
     Player* leader = m_party ? m_party->getLeader() : nullptr;
     if (m_currentState == State::WORLD_EXPLORATION && leader && m_world && m_world->getCurrentMap()) {
-        // Calculate viewport-relative position for player
+        // Calculate viewport matching Map::render
         Map* currentMap = m_world->getCurrentMap();
-        const int VIEWPORT_WIDTH = 15;
-        const int VIEWPORT_HEIGHT = 15;
-        int mapWidth = currentMap->getWidth();
-        int mapHeight = currentMap->getHeight();
-        int startX = (mapWidth > VIEWPORT_WIDTH) ? (mapWidth - VIEWPORT_WIDTH) / 2 : 0;
-        int startY = (mapHeight > VIEWPORT_HEIGHT) ? (mapHeight - VIEWPORT_HEIGHT) / 2 : 0;
-        
-        // Calculate tile size (same as in Map::render)
-        float screenAspect = 800.0f / 600.0f;
-        float tileWidth = 2.0f / VIEWPORT_WIDTH;
-        float tileHeight = 2.0f / VIEWPORT_HEIGHT;
-        tileWidth = tileHeight / screenAspect;
-        
-        // Convert player world position to viewport-relative normalized coordinates
-        float playerX = leader->getX();
-        float playerY = leader->getY();
-        float normalizedX = -1.0f + (playerX - startX) * tileWidth + tileWidth * 0.5f;
-        float normalizedY = -1.0f + (playerY - startY) * tileHeight + tileHeight * 0.5f;
+        float screenAspect = static_cast<float>(renderer->getSwapchainExtent().width) /
+                             static_cast<float>(renderer->getSwapchainExtent().height);
+        // Same viewport the map and entities use, so the player lines up with
+        // the tiles it is standing on.
+        Map::Viewport vp = currentMap->getViewport(screenAspect);
 
-        // Render player at viewport-relative position
-        if (leader->getX() >= startX && leader->getX() < startX + VIEWPORT_WIDTH &&
-            leader->getY() >= startY && leader->getY() < startY + VIEWPORT_HEIGHT) {
-            // Player is within viewport, render using texture
-            int textureIndex = leader->getTextureIndex();
-            if (textureIndex >= 0) {
-                renderer->renderSpriteWithTexture(normalizedX, normalizedY, tileWidth, tileHeight, textureIndex);
-            } else {
-                renderer->renderSprite(normalizedX, normalizedY, tileWidth, tileHeight);
-            }
+        float normalizedX = 0.0f;
+        float normalizedY = 0.0f;
+        currentMap->worldToNdc(vp, leader->getX(), leader->getY(), normalizedX, normalizedY);
+
+        // Render player
+        int textureIndex = leader->getTextureIndex();
+        if (textureIndex >= 0) {
+            renderer->renderSpriteWithTexture(normalizedX, normalizedY, vp.tileWidth, vp.tileHeight, textureIndex);
+        } else {
+            renderer->renderSprite(normalizedX, normalizedY, vp.tileWidth, vp.tileHeight);
         }
     }
 }
@@ -360,6 +338,12 @@ void GameState::handleInput(InputAction action) {
     } else if (m_currentState == State::CHARACTER_SELECTION && m_charSelectionSystem) {
         m_charSelectionSystem->handleInput(action);
     } else if (m_currentState == State::WORLD_EXPLORATION && m_party && m_world) {
+        // Pause toggle
+        if (action == InputAction::PAUSE || action == InputAction::OPEN_MENU) {
+            togglePause();
+            return;
+        }
+
         Map* currentMap = m_world->getCurrentMap();
         Player* leader = m_party->getLeader();
         if (currentMap && leader) {
@@ -380,7 +364,123 @@ void GameState::handleInput(InputAction action) {
                     break;
             }
         }
+    } else if (m_currentState == State::PAUSED) {
+        // Unpause on PAUSE/CANCEL/CONFIRM
+        if (action == InputAction::PAUSE || action == InputAction::CANCEL || action == InputAction::CONFIRM) {
+            togglePause();
+        }
     } else if (m_currentState == State::BATTLE && m_uiManager) {
         m_uiManager->handleInput(action);
+    } else if (m_currentState == State::GAME_OVER) {
+        handleGameOverInput(action);
+    }
+}
+
+void GameState::startNewGame() {
+    // Create the party with Rayne's class chosen in character selection.
+    m_party = std::make_unique<Party>();
+    auto rayne = m_charSelectionSystem->createSelectedCharacter();
+    if (rayne) {
+        rayne->setName("Rayne");
+        rayne->initialize();
+        if (m_renderer) {
+            rayne->loadTexture(m_renderer);
+        }
+        m_party->addMember(std::move(rayne));
+    }
+
+    auto cyph = std::make_unique<Player>(Player::CharacterClass::NETRUNNER, "Cyph");
+    cyph->initialize();
+    if (m_renderer) {
+        cyph->loadTexture(m_renderer);
+    }
+    m_party->addMember(std::move(cyph));
+
+    auto vash = std::make_unique<Player>(Player::CharacterClass::INFILTRATOR, "Vash");
+    vash->initialize();
+    if (m_renderer) {
+        vash->loadTexture(m_renderer);
+    }
+    m_party->addMember(std::move(vash));
+
+    // Initialize world
+    m_world = std::make_unique<World>();
+    if (m_world->initialize()) {
+        m_world->setPlayer(m_party->getLeader());
+        if (m_renderer) {
+            m_world->loadMapTextures(m_renderer);
+        }
+        if (m_party->getLeader()) {
+            m_party->getLeader()->setPosition(15.0f, 16.0f);
+        }
+    }
+
+    // Attach NPC dialogues
+    ContentFactory::attachNPCDialogues(m_world.get());
+
+    // Rebuild quest log for new game
+    m_questLog = std::make_unique<QuestLog>();
+    ContentFactory::createQuestChain(m_questLog.get());
+
+    m_currentState = State::WORLD_EXPLORATION;
+}
+
+void GameState::loadGame() {
+    if (!m_saveSystem || !m_questLog) {
+        std::cerr << "Cannot load game: save system or quest log not initialized." << std::endl;
+        return;
+    }
+
+    // Attempt to load party and quest log from save file.
+    m_party = std::make_unique<Party>();
+    if (!m_saveSystem->loadGame("savegame.txt", m_party.get(), m_questLog.get())) {
+        std::cerr << "No save file found or load failed. Starting new game instead." << std::endl;
+        m_party.reset();
+        m_currentState = State::CHARACTER_SELECTION;
+        return;
+    }
+
+    // Initialize world for loaded game
+    m_world = std::make_unique<World>();
+    if (m_world->initialize()) {
+        m_world->setPlayer(m_party->getLeader());
+        if (m_renderer) {
+            m_world->loadMapTextures(m_renderer);
+        }
+        ContentFactory::attachNPCDialogues(m_world.get());
+    }
+
+    m_currentState = State::WORLD_EXPLORATION;
+    std::cout << "Game loaded successfully." << std::endl;
+}
+
+void GameState::togglePause() {
+    if (m_currentState == State::WORLD_EXPLORATION) {
+        m_currentState = State::PAUSED;
+        if (m_audioManager) {
+            m_audioManager->setMuted(true);
+        }
+        std::cout << "Game paused." << std::endl;
+    } else if (m_currentState == State::PAUSED) {
+        m_currentState = State::WORLD_EXPLORATION;
+        if (m_audioManager) {
+            m_audioManager->setMuted(false);
+        }
+        std::cout << "Game resumed." << std::endl;
+    }
+}
+
+void GameState::handleGameOverInput(InputAction action) {
+    if (action == InputAction::CONFIRM) {
+        // Restart — go back to menu
+        m_party.reset();
+        m_world.reset();
+        m_battleSystem.reset();
+        m_questLog = std::make_unique<QuestLog>();
+        ContentFactory::createQuestChain(m_questLog.get());
+        m_currentState = State::MENU;
+        std::cout << "Returning to main menu." << std::endl;
+    } else if (action == InputAction::CANCEL) {
+        m_currentState = State::EXIT;
     }
 }

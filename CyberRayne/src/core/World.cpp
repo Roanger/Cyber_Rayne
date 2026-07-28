@@ -6,13 +6,14 @@
 #include "../../include/EnemyTypes.h"
 #include "../../include/NPC.h"
 #include "../../include/BattleSystem.h"
+#include "../../include/EncounterTable.h"
 #include <iostream>
 #include <cmath>
 #include <fstream>
 #include <sstream>
 
 World::World()
-    : m_currentMap(nullptr), m_currentBiome(BiomeType::TOWN), m_player(nullptr) {
+    : m_currentMap(nullptr), m_currentBiome(BiomeType::NEO_KYOTO_CENTRAL), m_player(nullptr) {
 }
 
 World::~World() {
@@ -21,6 +22,9 @@ World::~World() {
 
 bool World::initialize() {
     std::cout << "Initializing world..." << std::endl;
+    
+    // Initialize encounter tables
+    initializeEncounterTables();
     
     // Create maps
     createMaps();
@@ -41,6 +45,7 @@ bool World::initialize() {
 }
 
 void World::loadMapTextures(VulkanRenderer* renderer) {
+#ifndef NO_VULKAN
     if (!renderer) return;
     
     std::cout << "Loading textures for all maps..." << std::endl;
@@ -49,6 +54,7 @@ void World::loadMapTextures(VulkanRenderer* renderer) {
             map->loadTileTextures(renderer);
         }
     }
+#endif
 }
 
 void World::update(float deltaTime) {
@@ -58,25 +64,46 @@ void World::update(float deltaTime) {
 }
 
 void World::render(VulkanRenderer* renderer) {
+#ifndef NO_VULKAN
     if (m_currentMap) {
+        // Update viewport to follow player
+        if (m_player) {
+            m_currentMap->setPlayerViewport(m_player->getX(), m_player->getY());
+        }
         m_currentMap->render(renderer);
-        
-        // Render entities on the map
-        for (const auto& enemy : m_currentMap->getEnemies()) {
-            // Render a simple sprite for the enemy at its position
-            renderer->renderSprite(enemy->getX(), enemy->getY(), 0.1f, 0.1f);
-        }
-        
+
+        // Entities live in world tile space and must go through the same
+        // viewport transform as the tiles, or they draw off-screen.
+        float screenAspect = static_cast<float>(renderer->getSwapchainExtent().width) /
+                             static_cast<float>(renderer->getSwapchainExtent().height);
+        Map::Viewport vp = m_currentMap->getViewport(screenAspect);
+
+        float ndcX = 0.0f;
+        float ndcY = 0.0f;
+
+        // Placeholder markers until per-entity sprites exist: cyan for NPCs,
+        // magenta for enemies.
         for (const auto& npc : m_currentMap->getNPCs()) {
-            // Render a simple sprite for the NPC at its position
-            renderer->renderSprite(npc->getX(), npc->getY(), 0.1f, 0.1f);
+            if (m_currentMap->worldToNdc(vp, npc->getX(), npc->getY(), ndcX, ndcY)) {
+                renderer->renderSprite(ndcX, ndcY, vp.tileWidth * 0.7f, vp.tileHeight * 0.7f,
+                                       0.2f, 0.9f, 1.0f, 1.0f);
+            }
         }
-        
+
+        for (const auto& enemy : m_currentMap->getEnemies()) {
+            if (m_currentMap->worldToNdc(vp, enemy->getX(), enemy->getY(), ndcX, ndcY)) {
+                renderer->renderSprite(ndcX, ndcY, vp.tileWidth * 0.8f, vp.tileHeight * 0.8f,
+                                       1.0f, 0.15f, 0.5f, 1.0f);
+            }
+        }
+
+
         // Render the player using Vulkan
         if (m_player) {
             // The player is rendered separately in the GameState
         }
     }
+#endif
 }
 
 void World::loadMap(const std::string& mapName) {
@@ -104,204 +131,221 @@ void World::changeMap(const std::string& mapName) {
 }
 
 void World::createMaps() {
-    // Create a detailed starting village map
-    std::unique_ptr<Map> startingVillage = std::make_unique<Map>("Starting Village", 30, 25);
-    if (startingVillage->initialize()) {
-        // Customize the starting village with varied terrain
-        Map* map = startingVillage.get();
-        
-        // Fill the map with grass first
+    // === Neo-Kyoto Central ===
+    std::unique_ptr<Map> central = std::make_unique<Map>("Neo-Kyoto Central", 30, 25);
+    if (central->initialize()) {
+        Map* map = central.get();
+
+        // Fill with concrete base
         for (int y = 0; y < map->getHeight(); ++y) {
             for (int x = 0; x < map->getWidth(); ++x) {
-                map->setTile(x, y, std::make_unique<Tile>(Tile::TileType::GRASS, true));
+                map->setTile(x, y, std::make_unique<Tile>(Tile::TileType::CONCRETE, true));
             }
         }
-        
-        // Add trees around the edges and in clusters
-        const std::vector<std::pair<int, int>> treePositions = {
-            // Top edge trees
-            {2, 1}, {5, 1}, {8, 1}, {11, 1}, {14, 1}, {17, 1}, {20, 1}, {23, 1}, {26, 1},
-            // Bottom edge trees
-            {2, 23}, {5, 23}, {8, 23}, {11, 23}, {14, 23}, {17, 23}, {20, 23}, {23, 23}, {26, 23},
-            // Left edge trees
-            {1, 3}, {1, 6}, {1, 9}, {1, 12}, {1, 15}, {1, 18}, {1, 21},
-            // Right edge trees
-            {28, 3}, {28, 6}, {28, 9}, {28, 12}, {28, 15}, {28, 18}, {28, 21},
-            // Tree clusters
-            {4, 4}, {5, 5}, {6, 4}, {22, 4}, {23, 5}, {24, 4}, {4, 20}, {5, 19}, {6, 20}, {22, 20}, {23, 19}, {24, 20}
-        };
-        
-        for (const auto& pos : treePositions) {
-            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::TREE, false));
+
+        // Main road through the center
+        for (int x = 1; x < map->getWidth() - 1; ++x) {
+            map->setTile(x, 12, std::make_unique<Tile>(Tile::TileType::ROAD, true));
+            map->setTile(x, 13, std::make_unique<Tile>(Tile::TileType::ROAD, true));
         }
-        
-        // Create a small pond/stream
-        const std::vector<std::pair<int, int>> waterPositions = {
-            {25, 10}, {26, 10}, {27, 10}, {28, 10},
-            {25, 11}, {26, 11}, {27, 11}, {28, 11},
-            {26, 12}, {27, 12}, {28, 12}
+
+        // Buildings (metal walls) along the streets
+        const std::vector<std::pair<int, int>> buildings = {
+            // Left block
+            {3, 4}, {4, 4}, {5, 4}, {6, 4}, {3, 5}, {4, 5}, {5, 5}, {6, 5},
+            {3, 6}, {4, 6}, {5, 6}, {6, 6}, {3, 7}, {4, 7}, {5, 7}, {6, 7},
+            {3, 8}, {4, 8}, {5, 8}, {6, 8},
+            // Right block
+            {22, 4}, {23, 4}, {24, 4}, {25, 4}, {22, 5}, {23, 5}, {24, 5}, {25, 5},
+            {22, 6}, {23, 6}, {24, 6}, {25, 6}, {22, 7}, {23, 7}, {24, 7}, {25, 7},
+            {22, 8}, {23, 8}, {24, 8}, {25, 8},
+            // Lower left block
+            {3, 16}, {4, 16}, {5, 16}, {6, 16}, {3, 17}, {4, 17}, {5, 17}, {6, 17},
+            {3, 18}, {4, 18}, {5, 18}, {6, 18}, {3, 19}, {4, 19}, {5, 19}, {6, 19},
+            // Lower right block
+            {22, 16}, {23, 16}, {24, 16}, {25, 16}, {22, 17}, {23, 17}, {24, 17}, {25, 17},
+            {22, 18}, {23, 18}, {24, 18}, {25, 18}, {22, 19}, {23, 19}, {24, 19}, {25, 19},
         };
-        
-        for (const auto& pos : waterPositions) {
-            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::WATER, false));
+
+        for (const auto& pos : buildings) {
+            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::METAL, false));
         }
-        
-        // Create stone path from center to pond
-        const std::vector<std::pair<int, int>> pathPositions = {
-            {15, 12}, {16, 12}, {17, 12}, {18, 12}, {19, 12}, {20, 12}, {21, 12}, {22, 12}, {23, 12}, {24, 12}
+
+        // Neon signs (decorative, non-walkable)
+        const std::vector<std::pair<int, int>> neonSigns = {
+            {7, 4}, {21, 4}, {7, 16}, {21, 16}
         };
-        
-        for (const auto& pos : pathPositions) {
-            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::STONE, true));
+        for (const auto& pos : neonSigns) {
+            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::NEON, false));
         }
-        
-        // Create a small village building (house)
-        const std::vector<std::pair<int, int>> houseWalls = {
-            // House walls (8x6 building)
-            {10, 8}, {11, 8}, {12, 8}, {13, 8}, {14, 8}, {15, 8}, {16, 8}, {17, 8},
-            {10, 13}, {11, 13}, {12, 13}, {13, 13}, {14, 13}, {15, 13}, {16, 13}, {17, 13},
-            {10, 9}, {10, 10}, {10, 11}, {10, 12},
-            {17, 9}, {17, 10}, {17, 11}, {17, 12}
+
+        // Vending machines
+        map->setTile(14, 10, std::make_unique<Tile>(Tile::TileType::VENDING, false));
+        map->setTile(15, 10, std::make_unique<Tile>(Tile::TileType::VENDING, false));
+
+        // Hologram advertisements
+        map->setTile(10, 15, std::make_unique<Tile>(Tile::TileType::HOLOGRAM, false));
+        map->setTile(19, 15, std::make_unique<Tile>(Tile::TileType::HOLOGRAM, false));
+
+        // Building doors
+        map->setTile(4, 8, std::make_unique<Tile>(Tile::TileType::DOOR, true));
+        map->setTile(23, 8, std::make_unique<Tile>(Tile::TileType::DOOR, true));
+
+        // NPCs
+        {
+            auto fixer = std::make_unique<NPC>("Fixer Kaga", 14.0f, 15.0f);
+            map->addNPC(std::move(fixer));
+        }
+        {
+            auto vendor = std::make_unique<NPC>("Street Vendor", 16.0f, 10.0f);
+            map->addNPC(std::move(vendor));
+        }
+        {
+            auto informant = std::make_unique<NPC>("Info Broker", 8.0f, 15.0f);
+            map->addNPC(std::move(informant));
+        }
+
+        // Transition zone at top (to Neon Alley)
+        for (int x = 14; x <= 16; ++x) {
+            map->setTile(x, 1, std::make_unique<Tile>(Tile::TileType::ROAD, true));
+        }
+
+        m_maps.push_back(std::move(central));
+        std::cout << "Created Neo-Kyoto Central district" << std::endl;
+    }
+
+    // === Neon Alley ===
+    std::unique_ptr<Map> alley = std::make_unique<Map>("Neon Alley", 30, 25);
+    if (alley->initialize()) {
+        Map* map = alley.get();
+
+        // Fill with road base
+        for (int y = 0; y < map->getHeight(); ++y) {
+            for (int x = 0; x < map->getWidth(); ++x) {
+                map->setTile(x, y, std::make_unique<Tile>(Tile::TileType::ROAD, true));
+            }
+        }
+
+        // Narrow alley walls
+        const std::vector<std::pair<int, int>> alleyWalls = {
+            // Left wall
+            {2, 3}, {2, 4}, {2, 5}, {2, 6}, {2, 7}, {2, 8}, {2, 9}, {2, 10},
+            {2, 14}, {2, 15}, {2, 16}, {2, 17}, {2, 18}, {2, 19}, {2, 20},
+            // Right wall
+            {27, 3}, {27, 4}, {27, 5}, {27, 6}, {27, 7}, {27, 8}, {27, 9}, {27, 10},
+            {27, 14}, {27, 15}, {27, 16}, {27, 17}, {27, 18}, {27, 19}, {27, 20},
+            // Scattered debris
+            {8, 6}, {9, 6}, {20, 18}, {21, 18}, {12, 16}, {18, 8}
         };
-        
-        for (const auto& pos : houseWalls) {
+        for (const auto& pos : alleyWalls) {
+            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::METAL, false));
+        }
+
+        // Neon signs everywhere
+        const std::vector<std::pair<int, int>> neonSigns = {
+            {3, 4}, {5, 8}, {7, 12}, {10, 5}, {12, 18}, {15, 4},
+            {18, 15}, {20, 7}, {23, 12}, {25, 18}, {6, 20}, {22, 3}
+        };
+        for (const auto& pos : neonSigns) {
+            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::NEON, false));
+        }
+
+        // Vending machines
+        map->setTile(5, 12, std::make_unique<Tile>(Tile::TileType::VENDING, false));
+        map->setTile(24, 12, std::make_unique<Tile>(Tile::TileType::VENDING, false));
+
+        // NPCs
+        {
+            auto smuggler = std::make_unique<NPC>("Smuggler Ryo", 15.0f, 12.0f);
+            map->addNPC(std::move(smuggler));
+        }
+        {
+            auto hacker = std::make_unique<NPC>("Hacker Zero", 10.0f, 10.0f);
+            map->addNPC(std::move(hacker));
+        }
+
+        // Transition at bottom (back to Central)
+        for (int x = 14; x <= 16; ++x) {
+            map->setTile(x, 24, std::make_unique<Tile>(Tile::TileType::ROAD, true));
+        }
+
+        // Transition at top (to Corporate Plaza)
+        for (int x = 14; x <= 16; ++x) {
+            map->setTile(x, 1, std::make_unique<Tile>(Tile::TileType::ROAD, true));
+        }
+
+        m_maps.push_back(std::move(alley));
+        std::cout << "Created Neon Alley district" << std::endl;
+    }
+
+    // === Corporate Plaza ===
+    std::unique_ptr<Map> plaza = std::make_unique<Map>("Corporate Plaza", 25, 20);
+    if (plaza->initialize()) {
+        Map* map = plaza.get();
+
+        // Fill with metal floor
+        for (int y = 0; y < map->getHeight(); ++y) {
+            for (int x = 0; x < map->getWidth(); ++x) {
+                map->setTile(x, y, std::make_unique<Tile>(Tile::TileType::METAL, true));
+            }
+        }
+
+        // Corporate building (large structure)
+        const std::vector<std::pair<int, int>> corpWalls = {
+            // Building outline (10x8)
+            {8, 3}, {9, 3}, {10, 3}, {11, 3}, {12, 3}, {13, 3}, {14, 3}, {15, 3}, {16, 3}, {17, 3},
+            {8, 10}, {9, 10}, {10, 10}, {11, 10}, {12, 10}, {13, 10}, {14, 10}, {15, 10}, {16, 10}, {17, 10},
+            {8, 4}, {8, 5}, {8, 6}, {8, 7}, {8, 8}, {8, 9},
+            {17, 4}, {17, 5}, {17, 6}, {17, 7}, {17, 8}, {17, 9},
+        };
+        for (const auto& pos : corpWalls) {
             map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::WALL, false));
         }
-        
-        // House floor
-        for (int y = 9; y <= 12; ++y) {
-            for (int x = 11; x <= 16; ++x) {
+
+        // Interior floor
+        for (int y = 4; y <= 9; ++y) {
+            for (int x = 9; x <= 16; ++x) {
                 map->setTile(x, y, std::make_unique<Tile>(Tile::TileType::FLOOR, true));
             }
         }
-        
-        // House door
-        map->setTile(13, 13, std::make_unique<Tile>(Tile::TileType::DOOR, true));
-        
-        // Add a village elder NPC near the house
+
+        // Building entrance
+        map->setTile(12, 10, std::make_unique<Tile>(Tile::TileType::DOOR, true));
+        map->setTile(13, 10, std::make_unique<Tile>(Tile::TileType::DOOR, true));
+
+        // Hologram displays
+        map->setTile(4, 5, std::make_unique<Tile>(Tile::TileType::HOLOGRAM, false));
+        map->setTile(20, 5, std::make_unique<Tile>(Tile::TileType::HOLOGRAM, false));
+        map->setTile(4, 15, std::make_unique<Tile>(Tile::TileType::HOLOGRAM, false));
+        map->setTile(20, 15, std::make_unique<Tile>(Tile::TileType::HOLOGRAM, false));
+
+        // Neon accent
+        map->setTile(12, 2, std::make_unique<Tile>(Tile::TileType::NEON, false));
+        map->setTile(13, 2, std::make_unique<Tile>(Tile::TileType::NEON, false));
+
+        // NPCs
         {
-            auto elder = std::make_unique<NPC>("Village Elder", 14.0f, 15.0f);
-            map->addNPC(std::move(elder));
+            auto exec = std::make_unique<NPC>("Exec Tanaka", 12.0f, 14.0f);
+            map->addNPC(std::move(exec));
         }
-        
-        // Add a merchant NPC
         {
-            auto merchant = std::make_unique<NPC>("Merchant", 20.0f, 15.0f);
-            map->addNPC(std::move(merchant));
+            auto guard = std::make_unique<NPC>("Security Chief", 18.0f, 6.0f);
+            map->addNPC(std::move(guard));
         }
-        
-        // Add a villager NPC
-        {
-            auto villager = std::make_unique<NPC>("Villager", 8.0f, 15.0f);
-            map->addNPC(std::move(villager));
+
+        // Transition at bottom (back to Neon Alley)
+        for (int x = 11; x <= 13; ++x) {
+            map->setTile(x, 19, std::make_unique<Tile>(Tile::TileType::ROAD, true));
         }
-        
-        // Add transition zone at top (to forest)
-        // Player stepping on these tiles will transition to forest
-        const std::vector<std::pair<int, int>> transitionToForest = {
-            {14, 1}, {15, 1}, {16, 1}
-        };
-        
-        for (const auto& pos : transitionToForest) {
-            map->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::STONE, true));
-        }
-        
-        m_maps.push_back(std::move(startingVillage));
-        std::cout << "Created starting village map with varied terrain and NPCs" << std::endl;
-    }
-    
-    // Create a detailed forest map
-    std::unique_ptr<Map> forest = std::make_unique<Map>("Forest", 30, 25);
-    if (forest->initialize()) {
-        Map* forestMap = forest.get();
-        
-        // Fill the forest with grass base
-        for (int y = 0; y < forestMap->getHeight(); ++y) {
-            for (int x = 0; x < forestMap->getWidth(); ++x) {
-                forestMap->setTile(x, y, std::make_unique<Tile>(Tile::TileType::GRASS, true));
-            }
-        }
-        
-        // Add dense tree coverage
-        const std::vector<std::pair<int, int>> forestTrees = {
-            // Top dense forest
-            {3, 2}, {4, 2}, {5, 2}, {6, 2}, {7, 2}, {8, 2}, {9, 2}, {10, 2},
-            {3, 3}, {4, 3}, {5, 3}, {6, 3}, {7, 3}, {8, 3}, {9, 3}, {10, 3},
-            {3, 4}, {4, 4}, {5, 4}, {6, 4}, {7, 4}, {8, 4}, {9, 4}, {10, 4},
-            // Right dense forest
-            {20, 5}, {21, 5}, {22, 5}, {23, 5}, {24, 5}, {25, 5}, {26, 5},
-            {20, 6}, {21, 6}, {22, 6}, {23, 6}, {24, 6}, {25, 6}, {26, 6},
-            {20, 7}, {21, 7}, {22, 7}, {23, 7}, {24, 7}, {25, 7}, {26, 7},
-            {20, 8}, {21, 8}, {22, 8}, {23, 8}, {24, 8}, {25, 8}, {26, 8},
-            // Left dense forest
-            {2, 10}, {3, 10}, {4, 10}, {5, 10}, {6, 10},
-            {2, 11}, {3, 11}, {4, 11}, {5, 11}, {6, 11},
-            {2, 12}, {3, 12}, {4, 12}, {5, 12}, {6, 12},
-            {2, 13}, {3, 13}, {4, 13}, {5, 13}, {6, 13},
-            // Scattered trees in center
-            {12, 8}, {13, 9}, {14, 8}, {15, 10}, {16, 9}, {17, 11},
-            {12, 15}, {13, 16}, {14, 15}, {15, 17}, {16, 16}, {17, 18},
-            // Bottom forest edge
-            {8, 20}, {9, 20}, {10, 20}, {11, 20}, {12, 20}, {13, 20}, {14, 20},
-            {8, 21}, {9, 21}, {10, 21}, {11, 21}, {12, 21}, {13, 21}, {14, 21},
-            {8, 22}, {9, 22}, {10, 22}, {11, 22}, {12, 22}, {13, 22}, {14, 22}
-        };
-        
-        for (const auto& pos : forestTrees) {
-            forestMap->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::TREE, false));
-        }
-        
-        // Add a small clearing with stone path
-        const std::vector<std::pair<int, int>> forestPath = {
-            {15, 12}, {15, 13}, {15, 14}, {15, 15}, {15, 16}
-        };
-        
-        for (const auto& pos : forestPath) {
-            forestMap->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::STONE, true));
-        }
-        
-        // Add a small pond
-        const std::vector<std::pair<int, int>> forestWater = {
-            {18, 13}, {19, 13}, {20, 13},
-            {18, 14}, {19, 14}, {20, 14}
-        };
-        
-        for (const auto& pos : forestWater) {
-            forestMap->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::WATER, false));
-        }
-        
-        // Add transition zone at bottom (to return to village)
-        // Player stepping on these tiles will transition back to village
-        const std::vector<std::pair<int, int>> transitionToVillage = {
-            {14, 24}, {15, 24}, {16, 24}
-        };
-        
-        for (const auto& pos : transitionToVillage) {
-            forestMap->setTile(pos.first, pos.second, std::make_unique<Tile>(Tile::TileType::STONE, true));
-        }
-        
-        // Add a forest NPC
-        {
-            auto ranger = std::make_unique<NPC>("Forest Ranger", 15.0f, 12.0f);
-            forestMap->addNPC(std::move(ranger));
-        }
-        
-        m_maps.push_back(std::move(forest));
-        std::cout << "Created forest map with dense trees and clearing" << std::endl;
-    }
-    
-    // Create a town map
-    std::unique_ptr<Map> town = std::make_unique<Map>("Town", 25, 20);
-    if (town->initialize()) {
-        m_maps.push_back(std::move(town));
+
+        m_maps.push_back(std::move(plaza));
+        std::cout << "Created Corporate Plaza district" << std::endl;
     }
 }
 
 void World::initializeBiomes() {
-    // In a real implementation, we would initialize biome-specific data
-    // For now, we'll just set the current biome
-    m_currentBiome = BiomeType::FOREST;
-    std::cout << "Initialized biome to FOREST for testing" << std::endl;
+    m_currentBiome = BiomeType::NEO_KYOTO_CENTRAL;
+    std::cout << "Initialized biome to NEO_KYOTO_CENTRAL" << std::endl;
 }
 
 void World::spawnEnemies() {
@@ -328,124 +372,245 @@ void World::checkMapTransition() {
     // Check if player is on a transition tile
     std::string currentMapName = m_currentMap->getName();
     
-    if (currentMapName == "Starting Village") {
-        // Transition to Forest (top of map)
+    if (currentMapName == "Neo-Kyoto Central") {
+        // Transition to Neon Alley (top of map)
         if (playerTileY <= 1 && playerTileX >= 14 && playerTileX <= 16) {
-            std::cout << "Transitioning to Forest..." << std::endl;
-            changeMap("Forest");
-            // Place player at bottom of forest map
+            std::cout << "Transitioning to Neon Alley..." << std::endl;
+            changeMap("Neon Alley");
+            m_currentBiome = BiomeType::NEON_ALLEY;
             m_player->setPosition(15.0f, 23.0f);
         }
-    } else if (currentMapName == "Forest") {
-        // Transition back to Village (bottom of map)
+    } else if (currentMapName == "Neon Alley") {
+        // Transition back to Central (bottom of map)
         if (playerTileY >= 24 && playerTileX >= 14 && playerTileX <= 16) {
-            std::cout << "Transitioning to Starting Village..." << std::endl;
-            changeMap("Starting Village");
-            // Place player at top of village map
+            std::cout << "Transitioning to Neo-Kyoto Central..." << std::endl;
+            changeMap("Neo-Kyoto Central");
+            m_currentBiome = BiomeType::NEO_KYOTO_CENTRAL;
+            m_player->setPosition(15.0f, 2.0f);
+        }
+        // Transition to Corporate Plaza (top of map)
+        if (playerTileY <= 1 && playerTileX >= 14 && playerTileX <= 16) {
+            std::cout << "Transitioning to Corporate Plaza..." << std::endl;
+            changeMap("Corporate Plaza");
+            m_currentBiome = BiomeType::CORPORATE_PLAZA;
+            m_player->setPosition(12.0f, 18.0f);
+        }
+    } else if (currentMapName == "Corporate Plaza") {
+        // Transition back to Neon Alley (bottom of map)
+        if (playerTileY >= 19 && playerTileX >= 11 && playerTileX <= 13) {
+            std::cout << "Transitioning to Neon Alley..." << std::endl;
+            changeMap("Neon Alley");
+            m_currentBiome = BiomeType::NEON_ALLEY;
             m_player->setPosition(15.0f, 2.0f);
         }
     }
 }
 
 bool World::checkEnemyEncounter() {
-    if (!m_currentMap || !m_player) {
+    if (!m_currentMap || !m_player || hasActiveEncounter()) {
         return false;
     }
-    
-    // Get player position
+
     float playerX = m_player->getX();
     float playerY = m_player->getY();
-    
-    // Check distance to each enemy
-    const float encounterDistance = 0.5f;  // Adjust as needed
-    
+
+    // Slightly under one tile, so standing on an enemy's tile triggers it.
+    const float encounterDistance = 0.6f;
+
+    Enemy* triggered = nullptr;
     for (const auto& enemy : m_currentMap->getEnemies()) {
-        float enemyX = enemy->getX();
-        float enemyY = enemy->getY();
-        
-        // Calculate distance between player and enemy
-        float dx = playerX - enemyX;
-        float dy = playerY - enemyY;
-        float distance = std::sqrt(dx * dx + dy * dy);
-        
-        // If player is close enough to enemy, trigger encounter
-        if (distance <= encounterDistance) {
-            std::cout << "Player encountered " << enemy->getName() << "!" << std::endl;
-            return true;
+        float dx = playerX - enemy->getX();
+        float dy = playerY - enemy->getY();
+        if (std::sqrt(dx * dx + dy * dy) <= encounterDistance) {
+            triggered = enemy.get();
+            break;
         }
     }
-    
+
+    if (!triggered) {
+        return false;
+    }
+
+    std::cout << "Player encountered " << triggered->getName() << "!" << std::endl;
+
+    // Take only the triggering enemy into battle, not every enemy on the map.
+    auto claimed = m_currentMap->takeEnemy(triggered);
+    if (!claimed) {
+        return false;
+    }
+    m_activeEncounter.push_back(std::move(claimed));
+    m_encounterCooldown = ENCOUNTER_COOLDOWN_STEPS;
+    return true;
+}
+
+bool World::onPlayerStep() {
+    if (!m_currentMap || !m_player || hasActiveEncounter()) {
+        return false;
+    }
+
+    if (m_encounterCooldown > 0) {
+        --m_encounterCooldown;
+        return false;
+    }
+
+    const EncounterTable* table = getEncounterTable(m_currentBiome);
+    if (!table || table->isEmpty() || table->getEncounterRate() <= 0.0f) {
+        return false;
+    }
+
+    float roll = static_cast<float>(std::rand()) / static_cast<float>(RAND_MAX);
+    if (roll >= table->getEncounterRate()) {
+        return false;
+    }
+
+    auto group = table->spawnEncounter(1, 3);
+    if (group.empty()) {
+        return false;
+    }
+
+    std::cout << "Ambushed by " << group.size() << " hostile(s)!" << std::endl;
+    for (auto& enemy : group) {
+        m_activeEncounter.push_back(std::move(enemy));
+    }
+    m_encounterCooldown = ENCOUNTER_COOLDOWN_STEPS;
+    return true;
+}
+
+void World::endEncounter() {
+    m_activeEncounter.clear();
+    m_encounterCooldown = ENCOUNTER_COOLDOWN_STEPS;
+
+    // Keep the district populated so visible enemies don't run out.
+    if (m_currentMap && m_currentMap->getEnemies().size() < MIN_MAP_ENEMIES) {
+        const EncounterTable* table = getEncounterTable(m_currentBiome);
+        if (table && !table->isEmpty()) {
+            auto replacements = table->spawnEncounter(1, 1);
+            for (auto& enemy : replacements) {
+                float x = 0.0f;
+                float y = 0.0f;
+                if (findSpawnTile(m_currentMap, MIN_SPAWN_DISTANCE, x, y)) {
+                    enemy->setPosition(x, y);
+                    m_currentMap->addEnemy(std::move(enemy));
+                }
+            }
+        }
+    }
+}
+
+bool World::isTileOccupied(Map* map, int x, int y) const {
+    if (!map) return true;
+
+    auto sameTile = [x, y](float ex, float ey) {
+        return static_cast<int>(ex) == x && static_cast<int>(ey) == y;
+    };
+
+    for (const auto& enemy : map->getEnemies()) {
+        if (sameTile(enemy->getX(), enemy->getY())) return true;
+    }
+    for (const auto& npc : map->getNPCs()) {
+        if (sameTile(npc->getX(), npc->getY())) return true;
+    }
     return false;
 }
 
-void World::spawnEnemiesForBiome(BiomeType biome, Map* map) {
-    std::cout << "spawnEnemiesForBiome called with biome: " << static_cast<int>(biome) << std::endl;
-    // Clear existing enemies
-    // Note: This is a simplified approach. In a real game, you might want to
-    // preserve some enemies or have more sophisticated spawning logic.
-    
-    // For now, we'll just spawn a few enemies for demonstration
-    switch (biome) {
-        case BiomeType::FOREST:
-            // Spawn forest enemies
-            std::cout << "Spawning forest enemies..." << std::endl;
-            // Add a goblin at position (2.0, 2.0)
-            {
-                auto goblin = std::make_unique<Goblin>(1);
-                goblin->setPosition(2.0f, 2.0f);
-                std::cout << "Adding goblin at position (" << goblin->getX() << ", " << goblin->getY() << ")" << std::endl;
-                map->addEnemy(std::move(goblin));
-            }
-            // Add a wolf at position (-1.0, 1.0)
-            {
-                auto wolf = std::make_unique<Wolf>(2);
-                wolf->setPosition(-1.0f, 1.0f);
-                std::cout << "Adding wolf at position (" << wolf->getX() << ", " << wolf->getY() << ")" << std::endl;
-                map->addEnemy(std::move(wolf));
-            }
-            break;
-            
-        case BiomeType::DESERT:
-            // Spawn desert enemies
-            std::cout << "Spawning desert enemies..." << std::endl;
-            // Add a sand scorpion at position (1.5, -0.5)
-            {
-                auto scorpion = std::make_unique<SandScorpion>(1);
-                scorpion->setPosition(1.5f, -0.5f);
-                std::cout << "Adding sand scorpion at position (" << scorpion->getX() << ", " << scorpion->getY() << ")" << std::endl;
-                map->addEnemy(std::move(scorpion));
-            }
-            break;
-            
-        case BiomeType::MOUNTAIN:
-            // Spawn mountain enemies
-            std::cout << "Spawning mountain enemies..." << std::endl;
-            // Add a mountain lion at position (-1.5, -1.0)
-            {
-                auto lion = std::make_unique<MountainLion>(1);
-                lion->setPosition(-1.5f, -1.0f);
-                std::cout << "Adding mountain lion at position (" << lion->getX() << ", " << lion->getY() << ")" << std::endl;
-                map->addEnemy(std::move(lion));
-            }
-            break;
-            
-        case BiomeType::SWAMP:
-            // Spawn swamp enemies
-            std::cout << "Spawning swamp enemies..." << std::endl;
-            // Add a zombie at position (0.0, -2.0)
-            {
-                auto zombie = std::make_unique<Zombie>(1);
-                zombie->setPosition(0.0f, -2.0f);
-                std::cout << "Adding zombie at position (" << zombie->getX() << ", " << zombie->getY() << ")" << std::endl;
-                map->addEnemy(std::move(zombie));
-            }
-            break;
-            
-        case BiomeType::TOWN:
-        case BiomeType::DUNGEON:
-        default:
-            // No enemies in town or dungeon (for now)
-            std::cout << "No enemies to spawn in this biome." << std::endl;
-            break;
+bool World::findSpawnTile(Map* map, float minDistance, float& outX, float& outY) const {
+    if (!map) return false;
+
+    // Collect every candidate, then pick one at random, so spawns aren't biased
+    // toward the top-left corner the way a first-match scan would be.
+    std::vector<std::pair<int, int>> candidates;
+    float playerX = m_player ? m_player->getX() : -1000.0f;
+    float playerY = m_player ? m_player->getY() : -1000.0f;
+
+    for (int y = 0; y < map->getHeight(); ++y) {
+        for (int x = 0; x < map->getWidth(); ++x) {
+            if (!map->isTileWalkable(x, y)) continue;
+            if (isTileOccupied(map, x, y)) continue;
+
+            float dx = playerX - static_cast<float>(x);
+            float dy = playerY - static_cast<float>(y);
+            if (std::sqrt(dx * dx + dy * dy) < minDistance) continue;
+
+            candidates.emplace_back(x, y);
+        }
     }
+
+    if (candidates.empty()) {
+        return false;
+    }
+
+    const auto& chosen = candidates[std::rand() % candidates.size()];
+    outX = static_cast<float>(chosen.first);
+    outY = static_cast<float>(chosen.second);
+    return true;
+}
+
+void World::spawnEnemiesForBiome(BiomeType biome, Map* map) {
+    const EncounterTable* table = getEncounterTable(biome);
+    if (!table || table->isEmpty()) {
+        std::cout << "No encounter table for biome " << static_cast<int>(biome) << std::endl;
+        return;
+    }
+
+    // Placing enemies on searched walkable tiles rather than fixed coordinates:
+    // the old hardcoded corners fell inside buildings on Neo-Kyoto Central and
+    // outside the bounds of the smaller Corporate Plaza map entirely.
+    auto enemies = table->spawnEncounter(2, 4);
+
+    for (auto& enemy : enemies) {
+        float x = 0.0f;
+        float y = 0.0f;
+        if (!findSpawnTile(map, MIN_SPAWN_DISTANCE, x, y)) {
+            std::cout << "No walkable spawn tile left on " << map->getName()
+                      << "; skipping " << enemy->getName() << std::endl;
+            continue;
+        }
+        enemy->setPosition(x, y);
+        std::cout << "Spawned " << enemy->getName() << " at (" << x << ", " << y << ")" << std::endl;
+        map->addEnemy(std::move(enemy));
+    }
+}
+
+void World::initializeEncounterTables() {
+    // Neo-Kyoto Central — low-level street threats
+    auto central = std::make_unique<EncounterTable>("Neo-Kyoto Central");
+    central->setEncounterRate(0.04f);  // Starting district — keep it forgiving.
+    central->addEntry("StreetThug", 50, 1);
+    central->addEntry("StreetThug", 30, 2);
+    central->addEntry("SecurityDrone", 20, 2);
+    m_encounterTables.push_back(std::move(central));
+
+    // Neon Alley — moderate threats, more variety
+    auto alley = std::make_unique<EncounterTable>("Neon Alley");
+    alley->setEncounterRate(0.08f);
+    alley->addEntry("StreetThug", 30, 2);
+    alley->addEntry("SecurityDrone", 25, 3);
+    alley->addEntry("BlackICE", 20, 2);
+    alley->addEntry("CombatCyborg", 15, 3);
+    alley->addEntry("StreetThug", 10, 3);
+    m_encounterTables.push_back(std::move(alley));
+
+    // Corporate Plaza — high-level corporate security
+    auto plaza = std::make_unique<EncounterTable>("Corporate Plaza");
+    plaza->setEncounterRate(0.10f);  // Hostile territory — heaviest patrol density.
+    plaza->addEntry("SecurityDrone", 30, 3);
+    plaza->addEntry("CombatCyborg", 25, 4);
+    plaza->addEntry("CorporateEnforcer", 20, 3);
+    plaza->addEntry("BlackICE", 15, 3);
+    plaza->addEntry("CorporateEnforcer", 10, 4);
+    m_encounterTables.push_back(std::move(plaza));
+}
+
+const EncounterTable* World::getEncounterTable(BiomeType biome) const {
+    std::size_t index = 0;
+    switch (biome) {
+        case BiomeType::NEO_KYOTO_CENTRAL: index = 0; break;
+        case BiomeType::NEON_ALLEY:        index = 1; break;
+        case BiomeType::CORPORATE_PLAZA:   index = 2; break;
+        default: return nullptr;
+    }
+    if (index < m_encounterTables.size()) {
+        return m_encounterTables[index].get();
+    }
+    return nullptr;
 }
