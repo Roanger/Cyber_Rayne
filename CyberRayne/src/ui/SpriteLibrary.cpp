@@ -10,7 +10,15 @@ SpriteLibrary::SpriteLibrary(VulkanRenderer* renderer) : m_renderer(renderer) {}
 
 const Sprite& SpriteLibrary::get(const std::string& category, const std::string& name,
                                  int cols, int rows) {
-    const std::string key = category + "/" + spriteSlug(name);
+    return load(category + "/" + spriteSlug(name), cols, rows, true);
+}
+
+const Sprite& SpriteLibrary::sheet(const std::string& category, const std::string& name,
+                                   const std::string& kind, int cols, int rows) {
+    return load(category + "/" + spriteSlug(name) + "_" + kind, cols, rows, false);
+}
+
+const Sprite& SpriteLibrary::load(const std::string& key, int cols, int rows, bool reportMissing) {
     auto found = m_sprites.find(key);
     if (found != m_sprites.end()) {
         return found->second;
@@ -29,7 +37,7 @@ const Sprite& SpriteLibrary::get(const std::string& category, const std::string&
                 sprite.cols = cols > 0 ? cols : 1;
                 sprite.rows = rows > 0 ? rows : 1;
             }
-        } else {
+        } else if (reportMissing) {
             // Said once per name, since the result is cached.
             std::cerr << "No sprite for " << key << " (drawing a placeholder)" << std::endl;
         }
@@ -37,17 +45,26 @@ const Sprite& SpriteLibrary::get(const std::string& category, const std::string&
     return m_sprites.emplace(key, sprite).first->second;
 }
 
-const Sprite& SpriteLibrary::forMember(const Player& member) {
+std::string SpriteLibrary::memberArtName(const Player& member) const {
     // Checked on disk first so the "no sprite" message is not printed for
     // every class-sprite character.
     if (m_renderer) {
         const std::string own = m_renderer->getAssetsBasePath() + "/characters/" +
                                 spriteSlug(member.getName()) + ".png";
         if (std::filesystem::exists(own)) {
-            return get("characters", member.getName());
+            return member.getName();
         }
     }
-    return get("characters", Player::classToString(member.getCharacterClass()));
+    return Player::classToString(member.getCharacterClass());
+}
+
+const Sprite& SpriteLibrary::forMember(const Player& member) {
+    return get("characters", memberArtName(member));
+}
+
+const Sprite& SpriteLibrary::memberSheet(const Player& member, const std::string& kind,
+                                         int cols, int rows) {
+    return sheet("characters", memberArtName(member), kind, cols, rows);
 }
 
 void SpriteLibrary::draw(const Sprite& sprite, int leftPx, int topPx, int widthPx, int heightPx,

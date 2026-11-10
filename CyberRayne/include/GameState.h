@@ -133,6 +133,8 @@ private:
     bool m_pendingDevLoad = false;
     // Set by CYBERRAYNE_START=battle; consumed on the first update().
     bool m_pendingDevBattle = false;
+    // Seconds since start-up; drives idle animation on the map.
+    float m_animTime = 0.0f;
     std::unique_ptr<World> m_world;
     std::unique_ptr<Party> m_party;
     std::unique_ptr<CharacterSelectionSystem> m_charSelectionSystem;

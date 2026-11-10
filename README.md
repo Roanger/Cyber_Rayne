@@ -17,10 +17,11 @@ phase live in [AGENTS.md](AGENTS.md).
 - A shared party bag with healing items and equipment, usable in battle and from the pause menu
 - Save anywhere from the pause menu; saves live in `~/.local/share/CyberRayne/`
 - Rebindable keys (Settings), stored in `~/.config/CyberRayne/input.cfg`
-- A battle screen with character and enemy sprites, damage numbers and status tags
+- A battle screen with animated character and enemy sprites, damage numbers and status tags
+- Walking animation on the map, and NPCs that idle and gesture when spoken to
 - Procedurally generated pixel-art tiles
 
-Still to come: character animation, audio, and menu art.
+Still to come: audio and menu art.
 
 ## Building (Linux)
 
@@ -64,6 +65,6 @@ Defaults; all can be changed under Settings.
   (`core`, `entities`, `systems`, `graphics`, `ui`, `tests`)
 - `CyberRayne/shaders` — GLSL sources, compiled to SPIR-V at build time
 - `CyberRayne/assets` — sprites, UI, fonts
-- `CyberRayne/tools` — asset pipeline (`spriteprep.py`, `validate_assets.py`)
+- `CyberRayne/tools` — asset pipeline (`spriteprep.py`, `sheetprep.py`, `validate_assets.py`)
 - [ASSET_SPEC.md](ASSET_SPEC.md) — what assets must look like
 - [ASSET_LIST.md](ASSET_LIST.md) — which assets exist and their status

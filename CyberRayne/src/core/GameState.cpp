@@ -149,6 +149,7 @@ bool GameState::initialize() {
 }
 
 void GameState::update(float deltaTime) {
+    m_animTime += deltaTime;
     if (m_pendingDevStart) {
         m_pendingDevStart = false;
         std::cout << "CYBERRAYNE_START=world — skipping menus." << std::endl;
@@ -420,7 +421,7 @@ void GameState::renderWorldScene(VulkanRenderer* renderer) {
     if (m_world) {
         // Draws the map, then NPCs, enemies and the party leader together,
         // sorted so whoever stands lower on screen is in front.
-        m_world->render(renderer, m_sprites.get());
+        m_world->render(renderer, m_sprites.get(), m_animTime, m_talkingTo);
     }
 
     Player* leader = m_party ? m_party->getLeader() : nullptr;

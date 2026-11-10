@@ -160,7 +160,13 @@ int main() {
         expect(fx.getPopups()[0].age == 0.0f && fx.getPopups()[1].age < 0.0f,
                "the second number waits behind the first");
 
+        expect(fx.getAction(rayne).pose == BattleFx::Pose::ATTACK && fx.getAction(rayne).progress == 0.0f,
+               "the attacker starts their attack animation");
+        expect(fx.getAction(&thug).pose == BattleFx::Pose::IDLE, "the target is not acting");
+
         fx.update(BattleFx::LUNGE_TIME / 2.0f);
+        expect(fx.getAction(rayne).progress > 0.0f && fx.getAction(rayne).progress < 1.0f,
+               "the animation advances");
         expect(fx.getLunge(rayne) > 0.9f, "the attacker is at full lunge halfway through");
         expect(fx.getLunge(&thug) == 0.0f, "the target does not lunge");
 
@@ -178,8 +184,20 @@ int main() {
         expect(!fx.isDefeated(&thug) && fx.getVisibility(&thug) == 1.0f, "healing the fallen brings them back");
         expect(fx.getPopups().back().text == "+5", "heals show with a plus sign");
 
+        expect(fx.getAction(rayne).pose == BattleFx::Pose::IDLE, "a finished action returns to idle");
+
         fx.reset();
         expect(!fx.isBusy() && fx.getPopups().empty(), "reset clears everything");
+
+        // Which animation plays is decided by what was done.
+        fx.onEvents({{Event::Kind::ACTION, rayne, 0, "Defend"}});
+        expect(fx.getAction(rayne).pose == BattleFx::Pose::GUARD, "defending plays the guard animation");
+        expect(fx.isBusy(), "an animation in progress keeps the battle waiting");
+        fx.onEvents({{Event::Kind::ACTION, rayne, 0, "Overclock"}});
+        expect(fx.getAction(rayne).pose == BattleFx::Pose::ABILITY, "anything else plays the ability animation");
+        fx.update(BattleFx::ACTION_TIME + 0.01f);
+        expect(fx.getAction(rayne).pose == BattleFx::Pose::IDLE && !fx.isBusy(), "and then ends");
+        fx.reset();
     }
 
     // --- Every status effect has a tag --------------------------------------

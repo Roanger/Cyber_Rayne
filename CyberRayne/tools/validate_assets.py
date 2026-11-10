@@ -23,7 +23,7 @@ except ImportError:
     sys.exit("Pillow is required: pip install Pillow")
 
 sys.path.insert(0, str(Path(__file__).parent))
-from asset_spec import SPECS_BY_DIR  # noqa: E402
+from asset_spec import SPECS_BY_DIR, sheet_kind_for  # noqa: E402
 
 # PNG and JPEG magic numbers. We check bytes, not the file extension, because
 # the extension is exactly what lied last time.
@@ -36,6 +36,46 @@ class Problem:
         self.path = path
         self.message = message
         self.fix = fix
+
+
+# Folders whose sprites may have animation sheets beside them.
+SHEET_DIRS = ("characters", "enemies", "npcs")
+
+
+def check_sheet(path: Path, rel: Path, im, spec, kind_name: str, kind) -> list[Problem]:
+    """Checks for an animation sheet: an exact grid with art in every frame."""
+    fix = f"Rebuild with: python3 tools/sheetprep.py Raw/sheets/{path.name}"
+    w, h = im.size
+    if w % kind.cols or h % kind.rows:
+        return [Problem(rel, f"{w}x{h} does not divide into a {kind.cols}x{kind.rows} grid", fix)]
+
+    problems: list[Problem] = []
+    fw, fh = w // kind.cols, h // kind.rows
+    base = path.with_name(path.stem[: -len(kind_name) - 1] + ".png")
+    if not base.is_file():
+        problems.append(Problem(
+            rel, f"no standing sprite {base.name} beside it",
+            "A sheet is found through its standing sprite; add that first."))
+    elif kind.fixed_frame:
+        with Image.open(base) as base_im:
+            if (fw, fh) != base_im.size:
+                problems.append(Problem(
+                    rel, f"frames are {fw}x{fh} but {base.name} is "
+                         f"{base_im.size[0]}x{base_im.size[1]}", fix))
+    if not kind.fixed_frame and not (spec.size[0] <= fw <= kind.max_frame[0]
+                                     and spec.size[1] <= fh <= kind.max_frame[1]):
+        problems.append(Problem(
+            rel, f"frames are {fw}x{fh} but must be {spec.size[0]}x{spec.size[1]} to "
+                 f"{kind.max_frame[0]}x{kind.max_frame[1]}", fix))
+
+    if im.mode == "RGBA":
+        alpha = im.getchannel("A")
+        empty = [f"{kind.row_names[r]} {c + 1}"
+                 for r in range(kind.rows) for c in range(kind.cols)
+                 if alpha.crop((c * fw, r * fh, (c + 1) * fw, (r + 1) * fh)).getbbox() is None]
+        if empty:
+            problems.append(Problem(rel, "empty frame(s): " + ", ".join(empty), fix))
+    return problems
 
 
 def check_file(path: Path, spec, assets_root: Path) -> list[Problem]:
@@ -62,8 +102,13 @@ def check_file(path: Path, spec, assets_root: Path) -> list[Problem]:
         mode = im.mode
         has_alpha = mode in ("RGBA", "LA") or "transparency" in im.info
         alpha_extrema = im.getchannel("A").getextrema() if mode == "RGBA" else None
+        sheet = sheet_kind_for(path.stem) if spec.directory in SHEET_DIRS else None
+        if sheet is not None:
+            problems.extend(check_sheet(path, rel, im, spec, *sheet))
 
-    if not spec.accepts(w, h):
+    if sheet is not None:
+        pass  # size is judged per frame, above
+    elif not spec.accepts(w, h):
         problems.append(Problem(
             rel, f"{w}x{h} but spec is {spec.describe()}",
             f"Run: python3 tools/spriteprep.py '{path}' --category {spec.directory}"))

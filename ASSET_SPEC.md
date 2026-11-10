@@ -164,3 +164,32 @@ geometry work, not art:
 
 Producing these as textures costs art time and gives up runtime control over
 colour and animation.
+
+## Animation sheets
+
+A character, enemy or NPC can have animation sheets beside its standing sprite. They
+are optional: without one the game draws the standing sprite.
+
+| File | Grid | Rows, top to bottom | Frame size |
+|---|---|---|---|
+| `characters/<name>_walk.png` | 4 x 4 | down, left, right, up | same as the standing sprite (96x128) |
+| `characters/<name>_battle.png`, `enemies/<name>_battle.png` | 4 x 4 | idle, attack, ability, guard | standing size up to 320x256 |
+| `npcs/<name>_idle_talk.png` | 4 x 2 | idle, talk | same as the standing sprite (96x128) |
+
+- In a walk row, frame 2 is the standing pose; the others are the stride.
+- In battle sheets the party faces screen-left and enemies face screen-right. Frames are
+  wider than the standing sprite to hold a weapon swing; the figure's feet are on the
+  bottom edge and their legs are centred, so the game can pin every frame to the same spot.
+- The rules live in `SHEET_KINDS` in `tools/asset_spec.py`, and the validator checks the
+  grid, the frame size, and that no frame is empty.
+
+`tools/sheetprep.py` builds a sheet from a raw generated one. It needs the standing
+sprite to exist already (that sets the folder and the character's height):
+
+```bash
+python3 tools/sheetprep.py Raw/sheets/*.png
+```
+
+Generated sheets are not on an exact grid, so it finds each pose by its outline rather
+than by cutting on grid lines, scales the whole sheet by one factor, and lines the
+frames up on the feet. Do not run `spriteprep.py` on a sheet.

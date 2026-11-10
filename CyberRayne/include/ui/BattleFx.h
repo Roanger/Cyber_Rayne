@@ -23,6 +23,17 @@ public:
     static constexpr float LUNGE_TIME = 0.30f;
     static constexpr float FADE_TIME = 0.60f;
     static constexpr float BANNER_TIME = 1.40f;
+    // How long an attack / ability animation plays.
+    static constexpr float ACTION_TIME = 0.52f;
+
+    // Which animation a combatant is in. The order matches the rows of a
+    // battle sprite sheet.
+    enum class Pose { IDLE = 0, ATTACK = 1, ABILITY = 2, GUARD = 3 };
+    struct Action {
+        Pose pose = Pose::IDLE;
+        // 0 at the start of the animation, approaching 1 at its end.
+        float progress = 0.0f;
+    };
 
     struct Popup {
         const Combatant* who = nullptr;
@@ -43,6 +54,9 @@ public:
     float getHitFlash(const Combatant* who) const;
     // 0 at rest, rising to 1 mid-lunge and back to 0.
     float getLunge(const Combatant* who) const;
+    // The attack / ability / guard animation this combatant is playing, or
+    // Pose::IDLE when they are not acting.
+    Action getAction(const Combatant* who) const;
     // 1 while standing, falling to 0 once defeated.
     float getVisibility(const Combatant* who) const;
     bool isDefeated(const Combatant* who) const;
@@ -58,6 +72,8 @@ private:
     struct Timers {
         float flash = 0.0f;
         float lunge = 0.0f;
+        float action = 0.0f;       // time left in the action animation
+        Pose pose = Pose::IDLE;
         float defeatedFor = -1.0f;  // negative: not defeated
     };
 

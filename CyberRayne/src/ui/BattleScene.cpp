@@ -17,6 +17,11 @@ namespace {
 constexpr int FALLBACK_W = 96;
 constexpr int FALLBACK_H = 128;
 
+// Battle animation sheets: four frames across; rows in BattleFx::Pose order.
+constexpr int SHEET_COLS = 4;
+constexpr int SHEET_ROWS = 4;
+constexpr float IDLE_FRAME_TIME = 0.24f;
+
 // Where the floor meets the skyline, as a fraction of the scene height.
 constexpr float HORIZON = 0.40f;
 
@@ -212,7 +217,8 @@ void BattleScene::render(VulkanRenderer* renderer, TextRenderer* text, SpriteLib
 
     struct Figure {
         const Combatant* who;
-        const Sprite* sprite;
+        const Sprite* sprite;   // standing sprite: sets the size and label positions
+        const Sprite* sheet;    // animation sheet, drawn instead when there is one
         Placement at;
         bool enemy;
     };
@@ -224,7 +230,8 @@ void BattleScene::render(VulkanRenderer* renderer, TextRenderer* text, SpriteLib
         const Sprite& sprite = sprites->get("enemies", enemy->getName());
         const int fw = sprite.valid() ? sprite.frameWidth() : FALLBACK_W;
         const int fh = sprite.valid() ? sprite.frameHeight() : FALLBACK_H;
-        figures.push_back({enemy, &sprite,
+        const Sprite& sheet = sprites->sheet("enemies", enemy->getName(), "battle", SHEET_COLS, SHEET_ROWS);
+        figures.push_back({enemy, &sprite, &sheet,
                            place(true, i, m_enemies.size(), fw, fh, screenW, sceneH, scale), true});
     }
     if (m_party) {
@@ -235,7 +242,8 @@ void BattleScene::render(VulkanRenderer* renderer, TextRenderer* text, SpriteLib
             const Sprite& sprite = sprites->forMember(*member);
             const int fw = sprite.valid() ? sprite.frameWidth() : FALLBACK_W;
             const int fh = sprite.valid() ? sprite.frameHeight() : FALLBACK_H;
-            figures.push_back({member, &sprite,
+            const Sprite& sheet = sprites->memberSheet(*member, "battle", SHEET_COLS, SHEET_ROWS);
+            figures.push_back({member, &sprite, &sheet,
                                place(false, i, members.size(), fw, fh, screenW, sceneH, scale), false});
         }
     }
@@ -277,7 +285,28 @@ void BattleScene::render(VulkanRenderer* renderer, TextRenderer* text, SpriteLib
             r = g = b = 0.28f;  // fallen party members stay, darkened
         }
 
-        if (figure.sprite->valid()) {
+        if (figure.sheet->valid()) {
+            // Sheet frames are wider than the standing sprite, to hold a
+            // weapon swing; the figure stands at the bottom centre of each.
+            const BattleFx::Action action = m_fx.getAction(who);
+            int row = static_cast<int>(action.pose);
+            int col = 0;
+            if (!who->isAlive()) {
+                row = 0;  // fallen: hold the first idle frame
+            } else if (action.pose != BattleFx::Pose::IDLE) {
+                col = std::min(SHEET_COLS - 1, static_cast<int>(action.progress * SHEET_COLS));
+            } else {
+                // Guarding lasts until their next turn, so it loops like idle.
+                row = static_cast<int>(who->isDefending() ? BattleFx::Pose::GUARD : BattleFx::Pose::IDLE);
+                // Offset by position so the line-up does not breathe in step.
+                const float t = m_time + static_cast<float>(figure.at.feetY) * 0.013f;
+                col = static_cast<int>(t / IDLE_FRAME_TIME) % SHEET_COLS;
+            }
+            const int w = figure.sheet->frameWidth() * scale;
+            const int h = figure.sheet->frameHeight() * scale;
+            sprites->draw(*figure.sheet, figure.at.feetX - w / 2, figure.at.feetY - h, w, h,
+                          r, g, b, visibility, col, row);
+        } else if (figure.sprite->valid()) {
             sprites->draw(*figure.sprite, x, y, figure.at.width, figure.at.height, r, g, b, visibility);
         } else {
             const uint32_t block = figure.enemy ? Theme::LOVE : Theme::FOAM;

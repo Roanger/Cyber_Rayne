@@ -31,7 +31,16 @@ void BattleFx::onEvents(const std::vector<BattleSystem::BattleEvent>& events) {
         switch (event.kind) {
             case Kind::ACTION:
                 if (who) {
-                    m_timers[who].lunge = LUNGE_TIME;
+                    Timers& timers = m_timers[who];
+                    timers.lunge = LUNGE_TIME;
+                    timers.action = ACTION_TIME;
+                    if (event.text == "Attack") {
+                        timers.pose = Pose::ATTACK;
+                    } else if (event.text == "Defend") {
+                        timers.pose = Pose::GUARD;
+                    } else {
+                        timers.pose = Pose::ABILITY;  // abilities and items
+                    }
                     m_banner = who->getName() + ": " + event.text;
                 } else {
                     m_banner = event.text;
@@ -77,6 +86,7 @@ void BattleFx::update(float deltaTime) {
     for (auto& [who, timers] : m_timers) {
         timers.flash = std::max(0.0f, timers.flash - deltaTime);
         timers.lunge = std::max(0.0f, timers.lunge - deltaTime);
+        timers.action = std::max(0.0f, timers.action - deltaTime);
         if (timers.defeatedFor >= 0.0f) {
             timers.defeatedFor += deltaTime;
         }
@@ -104,6 +114,14 @@ float BattleFx::getLunge(const Combatant* who) const {
     return std::sin(progress * 3.14159265f);
 }
 
+BattleFx::Action BattleFx::getAction(const Combatant* who) const {
+    auto it = m_timers.find(who);
+    if (it == m_timers.end() || it->second.action <= 0.0f) {
+        return {};
+    }
+    return {it->second.pose, 1.0f - it->second.action / ACTION_TIME};
+}
+
 float BattleFx::getVisibility(const Combatant* who) const {
     auto it = m_timers.find(who);
     if (it == m_timers.end() || it->second.defeatedFor < 0.0f) {
@@ -122,7 +140,7 @@ bool BattleFx::isBusy() const {
         return true;
     }
     for (const auto& [who, timers] : m_timers) {
-        if (timers.flash > 0.0f || timers.lunge > 0.0f) return true;
+        if (timers.flash > 0.0f || timers.lunge > 0.0f || timers.action > 0.0f) return true;
         if (timers.defeatedFor >= 0.0f && timers.defeatedFor < FADE_TIME) return true;
     }
     return false;

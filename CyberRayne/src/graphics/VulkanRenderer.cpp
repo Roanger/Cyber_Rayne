@@ -1245,6 +1245,11 @@ void VulkanRenderer::setCurrentTexture(int textureIndex) {
 }
 
 int VulkanRenderer::loadTexture(const std::string& path) {
+    if (m_textures.size() >= MAX_TEXTURES) {
+        // Callers draw a placeholder for -1; better than ending the game.
+        std::cerr << "Texture limit (" << MAX_TEXTURES << ") reached; not loading " << path << std::endl;
+        return -1;
+    }
     int texWidth, texHeight, texChannels;
     stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
     VkDeviceSize imageSize = texWidth * texHeight * 4;
@@ -1311,6 +1316,10 @@ int VulkanRenderer::loadTexture(const std::string& path) {
 }
 
 int VulkanRenderer::loadTextureFromMemory(const uint8_t* pixels, int width, int height, int channels) {
+    if (m_textures.size() >= MAX_TEXTURES) {
+        std::cerr << "Texture limit (" << MAX_TEXTURES << ") reached; not loading in-memory texture" << std::endl;
+        return -1;
+    }
     if (!pixels || width <= 0 || height <= 0) {
         std::cerr << "Invalid in-memory texture data" << std::endl;
         return -1;
@@ -1638,15 +1647,20 @@ void VulkanRenderer::createDescriptorPool() {
     std::cout << "Creating descriptor pool..." << std::endl;
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+    // Every descriptor set -- one per frame in flight plus one per texture --
+    // holds a uniform buffer AND a sampler, so the pool needs that many of
+    // each. It used to reserve only two uniform buffers; the driver tolerated
+    // that until about 75 textures and then refused, which ended the game.
+    const uint32_t setCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT + MAX_TEXTURES);
+    poolSizes[0].descriptorCount = setCount;
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT + 100); // Extra space for texture descriptor sets
+    poolSizes[1].descriptorCount = setCount;
 
     VkDescriptorPoolCreateInfo poolInfo{};
     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
     poolInfo.pPoolSizes = poolSizes.data();
-    poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT + 100); // Extra space for texture descriptor sets
+    poolInfo.maxSets = setCount;
 
     if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptorPool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor pool!");

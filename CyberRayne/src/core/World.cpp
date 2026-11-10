@@ -69,7 +69,8 @@ void World::update(float deltaTime) {
     }
 }
 
-void World::render([[maybe_unused]] VulkanRenderer* renderer, [[maybe_unused]] SpriteLibrary* sprites) {
+void World::render([[maybe_unused]] VulkanRenderer* renderer, [[maybe_unused]] SpriteLibrary* sprites,
+                   [[maybe_unused]] float animTime, [[maybe_unused]] const std::string& talkingNpc) {
 #ifndef NO_VULKAN
     if (!m_currentMap) {
         return;
@@ -95,22 +96,42 @@ void World::render([[maybe_unused]] VulkanRenderer* renderer, [[maybe_unused]] S
         const Sprite* sprite;
         uint32_t fallback;  // block colour when there is no art
         bool marker;        // story fight: gold plate under the feet
+        int col;            // frame within an animation sheet
+        int row;
     };
     std::vector<Figure> figures;
 
-    auto add = [&](float wx, float wy, const Sprite* sprite, uint32_t fallback, bool marker) {
+    auto add = [&](float wx, float wy, const Sprite* sprite, uint32_t fallback, bool marker,
+                   int col = 0, int row = 0) {
         float ndcX = 0.0f;
         float ndcY = 0.0f;
         if (!m_currentMap->worldToNdc(vp, wx, wy, ndcX, ndcY)) return;
         figures.push_back({wy,
                            static_cast<int>((ndcX + 1.0f) * 0.5f * static_cast<float>(screenW)),
                            static_cast<int>((ndcY + 1.0f) * 0.5f * static_cast<float>(screenH)),
-                           sprite, fallback, marker});
+                           sprite, fallback, marker, col, row});
     };
 
+    // NPC sheets: row 0 is a slow idle, row 1 plays while they are spoken to.
+    constexpr float NPC_IDLE_FRAME_TIME = 0.45f;
+    constexpr float NPC_TALK_FRAME_TIME = 0.22f;
+    std::size_t npcIndex = 0;
     for (const auto& npc : m_currentMap->getNPCs()) {
-        add(npc->getX(), npc->getY(), sprites ? &sprites->get("npcs", npc->getName()) : nullptr,
-            Theme::FOAM, false);
+        ++npcIndex;
+        if (!sprites) {
+            add(npc->getX(), npc->getY(), nullptr, Theme::FOAM, false);
+            continue;
+        }
+        const Sprite& sheet = sprites->sheet("npcs", npc->getName(), "idle_talk", 4, 2);
+        if (sheet.valid()) {
+            const bool talking = !talkingNpc.empty() && npc->getName() == talkingNpc;
+            // Each NPC starts at a different point, so a crowd does not sway in step.
+            const float t = animTime + static_cast<float>(npcIndex) * 0.37f;
+            const int col = static_cast<int>(t / (talking ? NPC_TALK_FRAME_TIME : NPC_IDLE_FRAME_TIME)) % 4;
+            add(npc->getX(), npc->getY(), &sheet, Theme::FOAM, false, col, talking ? 1 : 0);
+        } else {
+            add(npc->getX(), npc->getY(), &sprites->get("npcs", npc->getName()), Theme::FOAM, false);
+        }
     }
     for (const auto& enemy : m_currentMap->getEnemies()) {
         add(enemy->getX(), enemy->getY(),
@@ -118,8 +139,17 @@ void World::render([[maybe_unused]] VulkanRenderer* renderer, [[maybe_unused]] S
             Theme::LOVE, isStoryMarker(enemy.get()));
     }
     if (m_player) {
-        add(m_player->getX(), m_player->getY(), sprites ? &sprites->forMember(*m_player) : nullptr,
-            Theme::TEXT, false);
+        // Walk sheets: one row per facing, in Player::Facing order.
+        const Sprite* walk = sprites ? &sprites->memberSheet(*m_player, "walk", 4, 4) : nullptr;
+        if (walk && walk->valid()) {
+            // The world is frozen during a conversation, so stand still for it.
+            const int frame = talkingNpc.empty() ? m_player->getWalkFrame() : Player::STANDING_FRAME;
+            add(m_player->getX(), m_player->getY(), walk, Theme::TEXT, false,
+                frame, static_cast<int>(m_player->getFacing()));
+        } else {
+            add(m_player->getX(), m_player->getY(), sprites ? &sprites->forMember(*m_player) : nullptr,
+                Theme::TEXT, false);
+        }
     }
 
     // Whoever stands further down the screen is drawn last, so they overlap
@@ -143,7 +173,7 @@ void World::render([[maybe_unused]] VulkanRenderer* renderer, [[maybe_unused]] S
             Theme::fillRect(renderer, figure.centreX - tileW * 3 / 10, feetY - 8, tileW * 6 / 10, 8,
                             0xFF000000, 0.35f);
             sprites->draw(*figure.sprite, figure.centreX - fw * scale / 2, feetY - 4 - fh * scale,
-                          fw * scale, fh * scale);
+                          fw * scale, fh * scale, 1.0f, 1.0f, 1.0f, 1.0f, figure.col, figure.row);
         } else {
             const int size = tileW * 7 / 10;
             Theme::fillRect(renderer, figure.centreX - size / 2, figure.centreY - size / 2, size, size,

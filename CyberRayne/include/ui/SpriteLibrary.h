@@ -35,12 +35,24 @@ public:
     // otherwise the one for their class (netrunner.png).
     const Sprite& forMember(const Player& member);
 
+    // An animation sheet that goes with a standing sprite:
+    // assets/<category>/<slug>_<kind>.png, cut into a cols x rows grid.
+    // Sheets are optional, so a missing one is not reported; callers fall
+    // back to the standing sprite.
+    const Sprite& sheet(const std::string& category, const std::string& name,
+                        const std::string& kind, int cols, int rows);
+    const Sprite& memberSheet(const Player& member, const std::string& kind, int cols, int rows);
+
     // Draw one frame into a pixel rectangle. tint multiplies the image colour.
     void draw(const Sprite& sprite, int leftPx, int topPx, int widthPx, int heightPx,
               float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f,
               int col = 0, int row = 0) const;
 
 private:
+    const Sprite& load(const std::string& key, int cols, int rows, bool reportMissing);
+    // The name a member's art is filed under: their own, or their class.
+    std::string memberArtName(const Player& member) const;
+
     VulkanRenderer* m_renderer;
     std::unordered_map<std::string, Sprite> m_sprites;
 };

@@ -3,6 +3,7 @@
 // placed at hardcoded corners that fell inside buildings or outside the map.
 
 #include "../../include/Map.h"
+#include "../../include/Player.h"
 #include "../../include/Tile.h"
 #include "../../include/World.h"
 #include "../../include/EncounterTable.h"
@@ -59,6 +60,46 @@ int main() {
 
     // Far-away entities are culled rather than smeared across the screen.
     expect(!map.worldToNdc(vp, 500.0f, 500.0f, ndcX, ndcY), "distant entity should be culled");
+
+    // --- Facing and the walk cycle ---------------------------------------
+    {
+        Player walker(Player::CharacterClass::SOLO, "Rayne");
+        walker.teleport(15.0f, 16.0f);
+        expect(walker.getFacing() == Player::Facing::DOWN, "a new character faces the camera");
+        expect(walker.getWalkFrame() == Player::STANDING_FRAME, "and stands still");
+
+        // Turning happens even when the step itself is refused.
+        walker.move(-1.0f, 0.0f, nullptr);
+        expect(walker.getFacing() == Player::Facing::DOWN, "no map, no turn");
+        walker.moveLeft(&map);
+        expect(walker.getFacing() == Player::Facing::LEFT, "pressing left faces left");
+        walker.teleport(15.0f, 16.0f);
+        walker.moveUp(&map);
+        expect(walker.getFacing() == Player::Facing::UP, "pressing up faces away");
+        walker.teleport(15.0f, 16.0f);
+        expect(walker.getWalkFrame() == Player::STANDING_FRAME, "teleporting stops the walk cycle");
+
+        walker.moveRight(&map);
+        expect(walker.isMoving(), "the test map is open ground");
+        expect(walker.getFacing() == Player::Facing::RIGHT, "pressing right faces right");
+        // Hold right for a second: the cycle must visit every frame and
+        // never drop to a stop between two back-to-back steps.
+        bool seen[Player::WALK_FRAMES] = {};
+        for (int i = 0; i < 60; ++i) {
+            if (!walker.isMoving()) walker.moveRight(&map);
+            walker.update(1.0f / 60.0f);
+            const int frame = walker.getWalkFrame();
+            expect(frame >= 0 && frame < Player::WALK_FRAMES, "walk frame is in range");
+            seen[frame] = true;
+        }
+        expect(seen[0] && seen[1] && seen[2] && seen[3], "a walk shows all four frames");
+
+        // Let go: the last step finishes, then the character settles.
+        for (int i = 0; i < 30; ++i) walker.update(1.0f / 60.0f);
+        expect(!walker.isMoving() && walker.getWalkFrame() == Player::STANDING_FRAME,
+               "standing again shortly after stopping");
+        expect(walker.getFacing() == Player::Facing::RIGHT, "still facing the way they walked");
+    }
 
     // --- Spawn placement --------------------------------------------------
     // Wall off a region and confirm nothing spawns in it, and that every spawn

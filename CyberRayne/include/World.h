@@ -35,7 +35,10 @@ public:
     bool initialize();
     void loadMapTextures(VulkanRenderer* renderer);
     void update(float deltaTime);
-    void render(VulkanRenderer* renderer, SpriteLibrary* sprites = nullptr);
+    // animTime: seconds, for idle animation. talkingNpc: name of the NPC in
+    // conversation (shown with their talking animation), or empty.
+    void render(VulkanRenderer* renderer, SpriteLibrary* sprites = nullptr,
+                float animTime = 0.0f, const std::string& talkingNpc = "");
     void spawnEnemies();
 
     // Map management

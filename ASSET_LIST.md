@@ -29,6 +29,12 @@ These are raw design drafts, not FINAL runtime assets. The linked manifest takes
 precedence over older naming/subject proposals below for this sprite batch.
 Runtime entries remain TEMP/MISSING until the sources are conformed and integrated.
 
+The follow-up [animation source batch](CyberRayne/Raw/sheets/README.md) contains
+22 generated sheets: five party walking sheets, ten party/enemy battle sheets,
+and seven NPC idle/talking sheets. Exact prompts and measured PNG checks are
+included. The raw sources stay untouched; `tools/sheetprep.py` built the
+game-ready sheets in `assets/` from them (2026-11-10), and all 22 are in use.
+
 | Status | Meaning |
 |--------|---------|
 | **[TEMP]** | A file exists in `assets/`, but it is placeholder and will be replaced. |

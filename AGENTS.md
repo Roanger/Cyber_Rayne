@@ -383,13 +383,34 @@ Done (2026-11-10):
 - All 17 are conformed into `assets/` and drawn in battle, on the map and on character
   select. Cyph and Vash have their own files.
 
+- **Animation sheets are in (2026-11-10).** The user generated 22 sheets into
+  `Raw/sheets/` (see its README). `tools/sheetprep.py` turns a raw sheet into an exact
+  grid: it finds each pose by its outline (generated sheets are not on a true grid, and
+  battle sheets are 1254 px wide, which does not divide by four), scales the sheet by one
+  factor so the figure matches its standing sprite, and lines frames up on the feet.
+  Rules are `SHEET_KINDS` in `tools/asset_spec.py`; the validator checks sheets.
+  - `<name>_walk.png` (4x4: down, left, right, up): `Player` now has `getFacing()` and
+    `getWalkFrame()`; `World::render` picks the frame. Turning works even into a wall.
+  - `<name>_battle.png` (4x4: idle, attack, ability, guard): `BattleFx::getAction()` says
+    which animation is playing; `BattleScene` draws it. Frames are wider than the standing
+    sprite, so the standing sprite still sets size and label positions and the sheet frame
+    is pinned by its bottom centre. **Keep the standing sprite; sheets are found through it.**
+  - `<npc>_idle_talk.png` (4x2): idle loop on the map, talk row during their conversation.
+  - Sheets are optional (`SpriteLibrary::sheet` / `memberSheet`); without one the standing
+    sprite is drawn.
+  - Not checked by hand yet: how the walk cycle and battle animations feel in motion
+    (frame timing, any jitter between generated frames). Enemy map sprites do not animate.
+
+**Bug fixed (2026-11-10): the game shut down when a fight started in Neon Alley.** Log:
+`Exception caught: failed to allocate texture descriptor sets!` on the 76th texture. Every
+descriptor set holds a uniform buffer and a sampler, but the pool reserved only two
+uniform buffers; the driver tolerated that up to about 75 textures, and the animation
+sheets pushed the count past it. The pool is now sized from
+`VulkanRenderer::MAX_TEXTURES` (512), and loading past the limit returns -1 (placeholder)
+instead of throwing. About 65 textures are loaded before any sprite sheet, most of them
+tiles generated per map.
+
 Remaining:
-- **Animation sheets.** The user is generating 4x4 sheets into `Raw/sheets/`:
-  `<name>_walk.png` (rows: down, left, right, up) and `<name>_battle.png` (rows: idle,
-  attack, ability, guard; party faces screen-left), plus `<npc>_idle_talk.png`. Needed:
-  conform them (the walk sheets seen so far have a hazy, not flat, backdrop that the
-  cutout must cope with), a sheet rule in the validator, facing/step state for the map,
-  and animation selection in `BattleScene` from `BattleFx` state.
 - Menu UI art: `ui/cursor.png`, `ui/menu_background.png`, `ui/namebanner.png` are the last
   three validator failures. Then make the validator blocking in CI.
 - Fix the hologram tile alpha (reads as a solid cyan floor).

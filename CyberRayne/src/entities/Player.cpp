@@ -70,7 +70,33 @@ bool Player::initialize() {
     return true;
 }
 
+namespace {
+// Seconds each walk-cycle frame is shown.
+constexpr float WALK_FRAME_TIME = 0.11f;
+// How long the character may stand between two steps before the walk cycle
+// stops. Holding a direction leaves a frame's gap between steps, and without
+// this the standing pose would flicker in on every tile.
+constexpr float WALK_GRACE = 0.06f;
+}  // namespace
+
+int Player::getWalkFrame() const {
+    if (m_walkClock < 0.0f) {
+        return STANDING_FRAME;
+    }
+    return static_cast<int>(m_walkClock / WALK_FRAME_TIME) % WALK_FRAMES;
+}
+
 void Player::update(float deltaTime) {
+    if (m_isMoving) {
+        m_walkClock = std::max(0.0f, m_walkClock) + deltaTime;
+        m_standingFor = 0.0f;
+    } else {
+        m_standingFor += deltaTime;
+        if (m_standingFor > WALK_GRACE) {
+            m_walkClock = -1.0f;
+        }
+    }
+
     // Handle smooth movement interpolation
     if (m_isMoving) {
         // Increment movement progress based on speed and deltaTime
@@ -232,6 +258,12 @@ void Player::move(float dx, float dy, Map* map) {
     
     // Don't allow new movement if already moving
     if (m_isMoving) return;
+
+    // Turn to face the way that was pressed, even if the way is blocked.
+    if (dx < 0.0f) m_facing = Facing::LEFT;
+    else if (dx > 0.0f) m_facing = Facing::RIGHT;
+    else if (dy < 0.0f) m_facing = Facing::UP;
+    else if (dy > 0.0f) m_facing = Facing::DOWN;
     
     // Calculate target tile position
     int currentTileX = static_cast<int>(m_x);
@@ -264,6 +296,7 @@ void Player::teleport(float x, float y) {
     m_isMoving = false;
     m_moveProgress = 0.0f;
     m_stepCompleted = false;
+    m_walkClock = -1.0f;
 }
 
 void Player::moveUp(Map* map) {

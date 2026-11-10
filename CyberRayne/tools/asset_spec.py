@@ -118,6 +118,50 @@ SPECS: list[CategorySpec] = [
 
 SPECS_BY_DIR = {s.directory: s for s in SPECS}
 
+
+@dataclass(frozen=True)
+class SheetKind:
+    """An animation sheet: a grid of equal-size frames, one animation per row.
+
+    A sheet sits beside the standing sprite it belongs to and is named
+    <standing sprite name>_<kind>.png. tools/sheetprep.py builds them.
+    """
+
+    cols: int
+    rows: int
+    row_names: tuple[str, ...]
+    # True: every frame is exactly the standing sprite's size (map sprites).
+    # False: frames may be larger, up to max_frame, to hold a weapon swing.
+    fixed_frame: bool
+    max_frame: tuple[int, int] = (0, 0)
+    notes: str = ""
+
+
+# Row order is what the game reads; changing it here means changing
+# World.cpp / BattleScene.cpp too.
+SHEET_KINDS: dict[str, SheetKind] = {
+    "walk": SheetKind(
+        cols=4, rows=4, row_names=("down", "left", "right", "up"), fixed_frame=True,
+        notes="Party members on the map. Frame 1 of each row is the standing pose."),
+    "battle": SheetKind(
+        cols=4, rows=4, row_names=("idle", "attack", "ability", "guard"),
+        fixed_frame=False, max_frame=(320, 256),
+        notes="Party members face screen-left, enemies face screen-right. "
+              "Feet on the bottom edge, legs centred in the frame."),
+    "idle_talk": SheetKind(
+        cols=4, rows=2, row_names=("idle", "talk"), fixed_frame=True,
+        notes="NPCs on the map."),
+}
+
+
+def sheet_kind_for(stem: str) -> tuple[str, SheetKind] | None:
+    """The sheet kind a file name (without .png) ends in, if any."""
+    # Longest suffix first, so a kind whose name ends in another's still wins.
+    for name in sorted(SHEET_KINDS, key=len, reverse=True):
+        if stem.endswith("_" + name):
+            return name, SHEET_KINDS[name]
+    return None
+
 # Palette shared by the procedural tiles in TileTextureGen.cpp. spriteprep.py
 # snaps generated art toward these so sprites sit in the same world as the
 # ground they stand on.

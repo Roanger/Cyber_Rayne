@@ -203,6 +203,9 @@ private:
   std::string m_assetsBasePath;
     int m_spritesToRender;
     static const int MAX_SPRITES = 2000; // Maximum number of sprites per frame
+    // Most textures that can be loaded at once. The game uses about 110 with
+    // every sprite sheet loaded; the descriptor pool is sized from this.
+    static constexpr size_t MAX_TEXTURES = 512;
     std::vector<SpriteTransform> m_spriteTransforms; // Store transform data for each sprite
 
     // Private methods

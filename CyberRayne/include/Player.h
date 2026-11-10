@@ -81,6 +81,16 @@ public:
     // the next update() drags the player back toward the old target.
     void teleport(float x, float y);
     bool isMoving() const { return m_isMoving; }
+
+    // Which way the character looks on the map. The order matches the rows
+    // of a walk sprite sheet.
+    enum class Facing { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 };
+    Facing getFacing() const { return m_facing; }
+    // Which of the four frames of the walk cycle to show. STANDING_FRAME
+    // when not walking.
+    static constexpr int WALK_FRAMES = 4;
+    static constexpr int STANDING_FRAME = 1;
+    int getWalkFrame() const;
     
     // True once per completed tile-to-tile move, cleared on read. Drives
     // step-based random encounters.
@@ -151,6 +161,12 @@ private:
     bool m_stepCompleted = false;
     float m_moveProgress;
     float m_moveSpeed; // tiles per second
+
+    Facing m_facing = Facing::DOWN;
+    // Time spent walking, kept across back-to-back steps so the cycle does
+    // not restart on every tile; negative when standing.
+    float m_walkClock = -1.0f;
+    float m_standingFor = 0.0f;
     
     int m_textureIndex;
 
