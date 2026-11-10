@@ -1,3 +1,4 @@
+#include <cmath>
 #include "../../include/Map.h"
 #include "../../include/Tile.h"
 #include "../../include/Enemy.h"
@@ -89,26 +90,34 @@ Map::Viewport Map::getViewport(float screenAspect) const {
     Viewport vp;
     // Viewport height in tiles; width derived from aspect ratio to fill screen
     vp.heightTiles = VIEWPORT_HEIGHT_TILES;
-    vp.widthTiles = static_cast<int>(VIEWPORT_HEIGHT_TILES * screenAspect + 0.5f);
-    if (vp.widthTiles < 1) vp.widthTiles = 1;
+    vp.widthTiles = static_cast<float>(VIEWPORT_HEIGHT_TILES) * screenAspect;
+    if (vp.widthTiles < 1.0f) vp.widthTiles = 1.0f;
 
-    // Default: center on map
-    vp.startX = (m_width > vp.widthTiles) ? (m_width - vp.widthTiles) / 2 : 0;
-    vp.startY = (m_height > vp.heightTiles) ? (m_height - vp.heightTiles) / 2 : 0;
+    const float mapW = static_cast<float>(m_width);
+    const float mapH = static_cast<float>(m_height);
+    const float viewH = static_cast<float>(vp.heightTiles);
 
-    // If a player position is set, center viewport on player
+    // Default: centre on the map.
+    float centreX = mapW * 0.5f;
+    float centreY = mapH * 0.5f;
+    // With a player position set, centre on the middle of the player's tile.
+    // The position is fractional mid-step, which is what makes the camera
+    // scroll smoothly.
     if (m_playerX >= 0 && m_playerY >= 0) {
-        vp.startX = static_cast<int>(m_playerX) - vp.widthTiles / 2;
-        vp.startY = static_cast<int>(m_playerY) - vp.heightTiles / 2;
-        // Clamp to map bounds
-        if (vp.startX + vp.widthTiles > m_width) vp.startX = m_width - vp.widthTiles;
-        if (vp.startY + vp.heightTiles > m_height) vp.startY = m_height - vp.heightTiles;
-        if (vp.startX < 0) vp.startX = 0;
-        if (vp.startY < 0) vp.startY = 0;
+        centreX = m_playerX + 0.5f;
+        centreY = m_playerY + 0.5f;
     }
 
+    // Stop at the map's edges; a map smaller than the view sits centred.
+    auto place = [](float centre, float view, float mapSize) {
+        if (mapSize <= view) return (mapSize - view) * 0.5f;
+        return std::clamp(centre - view * 0.5f, 0.0f, mapSize - view);
+    };
+    vp.startX = place(centreX, vp.widthTiles, mapW);
+    vp.startY = place(centreY, viewH, mapH);
+
     vp.tileWidth = 2.0f / vp.widthTiles;
-    vp.tileHeight = 2.0f / vp.heightTiles;
+    vp.tileHeight = 2.0f / viewH;
     return vp;
 }
 
@@ -132,12 +141,16 @@ void Map::render(VulkanRenderer* renderer) {
 
     Viewport vp = getViewport(screenAspect);
 
-    int endX = (vp.startX + vp.widthTiles < m_width) ? vp.startX + vp.widthTiles : m_width;
-    int endY = (vp.startY + vp.heightTiles < m_height) ? vp.startY + vp.heightTiles : m_height;
+    // The view can start partway through a tile, so draw from the tile
+    // holding its top-left corner through the one holding its bottom-right.
+    const int firstX = std::max(0, static_cast<int>(std::floor(vp.startX)));
+    const int firstY = std::max(0, static_cast<int>(std::floor(vp.startY)));
+    const int endX = std::min(m_width, static_cast<int>(std::ceil(vp.startX + vp.widthTiles)));
+    const int endY = std::min(m_height, static_cast<int>(std::ceil(vp.startY + static_cast<float>(vp.heightTiles))));
 
     // Render only the visible tiles
-    for (int y = vp.startY; y < endY; ++y) {
-        for (int x = vp.startX; x < endX; ++x) {
+    for (int y = firstY; y < endY; ++y) {
+        for (int x = firstX; x < endX; ++x) {
             Tile* tile = getTile(x, y);
             if (!tile) continue;
 

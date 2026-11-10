@@ -435,6 +435,13 @@ menu lays its buttons out again on a size change. Every other screen already lai
 from the swap chain size each frame. Not checked: very small windows, and the Windows
 build (unchanged).
 
+**Smooth camera and walk speed (user feedback, 2026-11-10).** The view used to start on a
+whole tile, so it stood still for half a step and then jumped a full tile. `Map::Viewport`
+now has a fractional `startX`/`startY`/`widthTiles`: the camera centres on the player's
+exact position and glides, tiles are exactly square at any window shape, and a map
+narrower than the window is centred. `Player::WALK_SPEED` is 6 tiles/s (was 8, which the
+user found a bit fast).
+
 **Enemies now choose targets at random** (`BattleSystem::pickEnemyTargetIndex`). They
 always hit the first living member, which was always Rayne. `BalanceTest` still reads
 100% everywhere, so the phase 13 "too easy" note stands.

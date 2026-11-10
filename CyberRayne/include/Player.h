@@ -81,6 +81,8 @@ public:
     // the next update() drags the player back toward the old target.
     void teleport(float x, float y);
     bool isMoving() const { return m_isMoving; }
+    // Walking speed on the map, in tiles per second.
+    static constexpr float WALK_SPEED = 6.0f;
 
     // Which way the character looks on the map. The order matches the rows
     // of a walk sprite sheet.

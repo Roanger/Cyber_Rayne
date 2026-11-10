@@ -56,9 +56,12 @@ public:
     // coordinates. Anything drawing world-space entities must go through this
     // so tiles and entities share one coordinate system.
     struct Viewport {
-        int startX = 0;
-        int startY = 0;
-        int widthTiles = 0;
+        // Top-left corner of the view, in tiles. Fractional, so the camera
+        // glides with the player instead of jumping a whole tile at a time.
+        float startX = 0.0f;
+        float startY = 0.0f;
+        // Fractional too, so tiles are exactly square at any window shape.
+        float widthTiles = 0.0f;
         int heightTiles = 0;
         float tileWidth = 0.0f;   // NDC
         float tileHeight = 0.0f;  // NDC

@@ -40,7 +40,7 @@ Player::Player(CharacterClass charClass, const std::string& name)
       m_mana(50), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
       m_experience(0), m_gold(0),
       m_x(0.0f), m_y(0.0f), m_startX(0.0f), m_startY(0.0f), m_targetX(0.0f), m_targetY(0.0f), 
-      m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(8.0f), m_textureIndex(-1) {
+      m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(WALK_SPEED), m_textureIndex(-1) {
     initializeStats();
     refreshAbilities();
 }
@@ -51,7 +51,7 @@ Player::Player()
       m_health(100), m_maxHealth(100), m_mana(50), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
       m_experience(0), m_gold(0),
       m_x(0.0f), m_y(0.0f), m_startX(0.0f), m_startY(0.0f), m_targetX(0.0f), m_targetY(0.0f),
-      m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(8.0f), m_textureIndex(-1) {
+      m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(WALK_SPEED), m_textureIndex(-1) {
     initializeStats();
     refreshAbilities();
 }
@@ -72,7 +72,7 @@ bool Player::initialize() {
 
 namespace {
 // Seconds each walk-cycle frame is shown.
-constexpr float WALK_FRAME_TIME = 0.11f;
+constexpr float WALK_FRAME_TIME = 0.14f;
 // How long the character may stand between two steps before the walk cycle
 // stops. Holding a direction leaves a frame's gap between steps, and without
 // this the standing pose would flicker in on every tile.

@@ -58,6 +58,24 @@ int main() {
     expect(std::fabs(ndcX) < 0.25f, "an unclamped player should be near the horizontal centre");
     expect(std::fabs(ndcY) < 0.25f, "an unclamped player should be near the vertical centre");
 
+    // The camera glides: half a tile of player movement moves the view half
+    // a tile, rather than nothing and then a whole tile at once.
+    {
+        map.setPlayerViewport(15.5f, 16.0f);
+        const Map::Viewport half = map.getViewport(aspect);
+        expect(nearlyEqual(half.startX - vp.startX, 0.5f), "the view follows a half-tile step by half a tile");
+        expect(nearlyEqual(half.startY, vp.startY), "and does not move on the other axis");
+        // At the map's edge the camera stops and the player walks on.
+        map.setPlayerViewport(0.0f, 0.0f);
+        const Map::Viewport corner = map.getViewport(aspect);
+        expect(nearlyEqual(corner.startX, 0.0f) && nearlyEqual(corner.startY, 0.0f), "the view stops at the map edge");
+        // A view wider than the map centres it.
+        const Map::Viewport wide = map.getViewport(4.0f);
+        expect(wide.startX < 0.0f && nearlyEqual(wide.startX + wide.widthTiles * 0.5f, map.getWidth() * 0.5f),
+               "a map narrower than the view sits in the middle");
+        map.setPlayerViewport(15.0f, 16.0f);
+    }
+
     // Far-away entities are culled rather than smeared across the screen.
     expect(!map.worldToNdc(vp, 500.0f, 500.0f, ndcX, ndcY), "distant entity should be culled");
 
@@ -107,7 +125,8 @@ int main() {
                 if (!runner.isMoving()) runner.moveRight(&map);
             }
             const float travelled = runner.getX() - 5.0f;
-            expect(travelled > 7.6f && travelled < 8.1f, "a second of held walking covers about eight tiles");
+            expect(travelled > Player::WALK_SPEED - 0.4f && travelled < Player::WALK_SPEED + 0.1f,
+                   "a second of held walking covers a second's worth of tiles");
         }
 
         // Turning on the spot, as when walking into an NPC.
