@@ -395,49 +395,94 @@ These are visual wishlist ideas, not additional items in the current catalog.
 
 ## 9. Audio (`assets/audio/`)
 
-AudioManager is still a stub; it does not decode or play files. `Phase5Test.cpp`
-registers example paths `bgm_main.ogg` and `sfx_hit.wav`, which are test data rather
-than runtime requirements. The filenames below are proposals. Settle formats and
-runtime registration during Phase 12 before authoring final audio.
+Rewritten 2026-11-10 to match the vertical slice as it actually plays. The earlier
+list dated from the fantasy prototype (fire and ice spells, a final boss) and is
+replaced. Nothing here exists yet; `AudioManager` is still a stub until phase 12.
 
-### Music
-| Asset | Status | Notes |
-|-------|--------|-------|
-| bgm_menu.ogg | [MISSING] | Proposed main menu theme |
-| bgm_central.ogg | [MISSING] | Neo-Kyoto Central exploration |
-| bgm_alley.ogg | [MISSING] | Neon Alley exploration |
-| bgm_plaza.ogg | [MISSING] | Corporate Plaza exploration |
-| bgm_battle.ogg | [MISSING] | Standard battle theme |
-| bgm_boss.ogg | [MISSING] | Boss battle theme |
-| bgm_game_over.ogg | [MISSING] | Game over theme |
-| bgm_victory.ogg | [MISSING] | Victory fanfare |
-| bgm_boss_final.ogg | [MISSING] | Final boss theme |
+**Formats (proposed, to confirm in phase 12):**
+- Music: `.ogg`, stereo, 44.1 kHz. Tracks marked *loop* must loop cleanly from end to
+  start with no gap or click.
+- Sound effects: `.wav`, mono, 44.1 kHz, 16-bit. Trim silence from the start so the
+  sound lands on the action; most should be under one second. Leave a little headroom
+  (peaks around -3 dB) so several can play at once.
 
-### SFX
-| Asset | Status | Notes |
-|-------|--------|-------|
-| sfx_hit.ogg | [MISSING] | Proposed physical hit sound; format pending |
-| sfx_shoot.ogg | [MISSING] | Gunfire |
-| sfx_explosion.ogg | [MISSING] | Explosion |
-| sfx_heal.ogg | [MISSING] | Healing sound |
-| sfx_levelup.ogg | [MISSING] | Level up jingle |
-| sfx_menu_move.ogg | [MISSING] | Menu navigation |
-| sfx_menu_select.ogg | [MISSING] | Menu confirm |
-| sfx_menu_cancel.ogg | [MISSING] | Menu cancel |
-| sfx_pause.ogg | [MISSING] | Pause toggle |
-| sfx_encounter.ogg | [MISSING] | Battle encounter trigger |
-| sfx_spell_fire.ogg | [MISSING] | Fire spell |
-| sfx_spell_ice.ogg | [MISSING] | Ice spell |
-| sfx_spell_lightning.ogg | [MISSING] | Lightning spell |
-| sfx_spell_hack.ogg | [MISSING] | Hack ability |
-| sfx_footstep.ogg | [MISSING] | Walking footstep |
-| sfx_door.ogg | [MISSING] | Door/transition |
-| sfx_save.ogg | [MISSING] | Save game |
-| sfx_load.ogg | [MISSING] | Load game |
-| sfx_death.ogg | [MISSING] | Character death |
-| sfx_victory.ogg | [MISSING] | Battle victory |
+Music lives in `assets/audio/music/`, sound effects in `assets/audio/sfx/`.
 
----
+### Music (9 tracks; composer)
+
+| File | Status | Where it plays |
+|------|--------|----------------|
+| title.ogg | [MISSING] | Title screen and character select. *Loop.* The main theme. |
+| central.ogg | [MISSING] | Exploring Neo-Kyoto Central. *Loop.* Home district; calm. |
+| alley.ogg | [MISSING] | Exploring Neon Alley. *Loop.* Seedier, tenser. |
+| plaza.ogg | [MISSING] | Exploring Corporate Plaza. *Loop.* Cold, corporate. |
+| battle.ogg | [MISSING] | Ordinary fights. *Loop.* |
+| boss.ogg | [MISSING] | The two story fights (thugs, Enforcer). *Loop.* |
+| victory.ogg | [MISSING] | Victory card. Short fanfare, then may loop quietly. |
+| game_over.ogg | [MISSING] | Game-over card. Short, plays once. |
+| ending.ogg | [MISSING] | Ending card after "The Truth". Plays once or loops. |
+
+If the composer's time is short, the order of importance is: title, battle, central,
+victory, then the rest. `alley` and `plaza` can share `central` at first, and `boss`
+can share `battle`.
+
+### Sound effects (32; generated)
+
+**Menus and interface**
+
+| File | Status | When |
+|------|--------|------|
+| ui_move.wav | [MISSING] | Cursor moves in any menu. Very short tick; heard constantly. |
+| ui_confirm.wav | [MISSING] | A choice is confirmed. |
+| ui_cancel.wav | [MISSING] | Backing out of a menu. |
+| ui_error.wav | [MISSING] | Something refused: cannot afford an ability, item cannot be used. |
+| ui_pause.wav | [MISSING] | Pause menu opens. |
+| ui_save.wav | [MISSING] | Game saved. |
+| ui_equip.wav | [MISSING] | Gear changed in the equipment screen. |
+
+**Exploring**
+
+| File | Status | When |
+|------|--------|------|
+| step.wav | [MISSING] | Footstep, one per tile walked. Soft; heard constantly. |
+| travel.wav | [MISSING] | Moving between districts. |
+| blocked.wav | [MISSING] | Turned back from a locked district. |
+| talk_blip.wav | [MISSING] | Dialogue advances to the next line. |
+| quest_new.wav | [MISSING] | A quest begins. |
+| quest_done.wav | [MISSING] | A quest is completed. |
+| rest.wav | [MISSING] | The Street Vendor's meal restores the party. |
+| encounter.wav | [MISSING] | A fight begins (the swoosh into battle). |
+
+**Battle: general**
+
+| File | Status | When |
+|------|--------|------|
+| turn_ready.wav | [MISSING] | A party member's turn gauge fills. |
+| guard.wav | [MISSING] | Someone defends. |
+| heal.wav | [MISSING] | HP restored: Stim Pack, Trauma Kit, Patch, regen. |
+| revive.wav | [MISSING] | Defib Patch brings someone back. |
+| buff.wav | [MISSING] | A helpful effect lands: Guard Protocol, Adrenal Surge, Smoke Screen, Servo Overdrive. |
+| debuff.wav | [MISSING] | A harmful effect lands: Corrupt, Lockout. |
+| poison.wav | [MISSING] | Poison ticks (Neurotoxin). Short and quiet; it repeats. |
+| stun.wav | [MISSING] | Someone is stunned (System Shock, Taser Burst). |
+| enemy_down.wav | [MISSING] | An enemy is defeated and fades out. |
+| ally_down.wav | [MISSING] | A party member falls. |
+| flee.wav | [MISSING] | The party escapes. |
+| level_up.wav | [MISSING] | Level up on the victory card. Short jingle. |
+
+**Battle: attacks**
+
+| File | Status | When |
+|------|--------|------|
+| hit_blunt.wav | [MISSING] | Heavy physical hit: Street Thug's pipe, Riot Slam, Combat Cyborg. |
+| hit_blade.wav | [MISSING] | Blades: the Infiltrator and Vash (Backstab, Shiv, Killswitch). |
+| gunshot.wav | [MISSING] | Guns: the Solo (attack, Suppressing Fire, Executioner). |
+| hack.wav | [MISSING] | Digital attacks: the Netrunner and Cyph (Ice Breaker), Black ICE (ICE Spike). |
+| zap.wav | [MISSING] | Electric and energy: Security Drone, System Shock, Taser Burst. |
+
+One sound per kind of attack rather than one per ability keeps the list short. If
+there is time for more, the first to split out are each class's strongest ability
+(Executioner, Corrupt, Killswitch) and the Corporate Enforcer's attacks.
 
 ## 10. Fonts (`assets/fonts/`)
 
