@@ -35,7 +35,22 @@ public:
     int getHealAmount() const { return m_healAmount; }
 
     void use(Player* player) override;
+    // Only the living and the wounded: it cannot raise the fallen.
+    bool canUseOn(const Player* target) const override;
 
 private:
     int m_healAmount;
+};
+
+// A consumable that gets a downed ally back up.
+class ReviveItem : public Item {
+public:
+    // healthPercent is how much of max HP the ally returns with, 1-100.
+    ReviveItem(const std::string& name, const std::string& description, int healthPercent);
+
+    void use(Player* player) override;
+    bool canUseOn(const Player* target) const override;
+
+private:
+    int m_healthPercent;
 };

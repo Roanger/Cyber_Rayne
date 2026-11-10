@@ -144,7 +144,7 @@ int main() {
     expect(q1 != nullptr, "quest 100 should exist");
     expect(q1->getName() == "The Data Chip", "quest 1 name should match");
     expect(q1->getObjectives().size() == 3, "quest 1 should have 3 objectives");
-    expect(q1->getExperienceReward() == 200, "quest 1 XP reward should be 200");
+    expect(q1->getExperienceReward() == 350, "quest 1 XP reward should be 350");
     expect(q1->getState() == Quest::State::NOT_STARTED, "quest 1 should start as NOT_STARTED");
 
     // Verify quest 2

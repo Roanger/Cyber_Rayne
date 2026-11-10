@@ -24,7 +24,7 @@ void NPC::interact() {
     }
 }
 
-void NPC::update(float deltaTime) {
+void NPC::update(float /*deltaTime*/) {
 }
 
 void NPC::render() {

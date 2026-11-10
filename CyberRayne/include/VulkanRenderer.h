@@ -131,7 +131,7 @@ public:
 #endif
 
 private:
-    const int MAX_FRAMES_IN_FLIGHT = 2;
+    static constexpr size_t MAX_FRAMES_IN_FLIGHT = 2;
     size_t m_currentFrame = 0;
 
     // Window variables
@@ -200,7 +200,7 @@ private:
   // Remember where assets were found so others can reference
   std::string m_assetsBasePath;
     int m_spritesToRender;
-    static const int MAX_SPRITES = 1000; // Maximum number of sprites per frame
+    static const int MAX_SPRITES = 2000; // Maximum number of sprites per frame
     std::vector<SpriteTransform> m_spriteTransforms; // Store transform data for each sprite
 
     // Private methods
@@ -240,7 +240,6 @@ private:
     bool createGraphicsPipeline();
     bool drawFrame();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
-    void renderColoredRect(VkCommandBuffer commandBuffer, float x, float y, float width, float height, float r, float g, float b);
 
     // Helper methods
     bool checkValidationLayerSupport();

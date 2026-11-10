@@ -3,6 +3,7 @@
 #include <memory>
 #include <vector>
 
+#include "Inventory.h"
 #include "Player.h"
 
 // A party of player-controlled characters.
@@ -27,6 +28,21 @@ public:
     int countAlive() const;
     Player* getFirstAliveMember() const;
 
+    // The shared bag. Items belong to the party, not to individual members.
+    Inventory& getBag() { return m_bag; }
+    const Inventory& getBag() const { return m_bag; }
+
+    // Use one consumable from the bag on a member. On failure nothing is
+    // consumed. message, if given, receives a line for the player either way.
+    bool useItem(const std::string& itemId, std::size_t memberIndex, std::string* message = nullptr);
+
+    // Move a weapon or armor from the bag onto a member. Whatever they were
+    // wearing in that slot goes back in the bag.
+    bool equipFromBag(std::size_t memberIndex, const std::string& itemId);
+    // Take off a member's weapon or armor and return it to the bag. slot must
+    // be WEAPON or ARMOR.
+    bool unequipToBag(std::size_t memberIndex, Item::ItemType slot);
+
     // Reset all members' ATB gauges (e.g., on battle start).
     void resetAtb();
 
@@ -35,4 +51,5 @@ public:
 
 private:
     std::vector<std::unique_ptr<Player>> m_members;
+    Inventory m_bag;
 };

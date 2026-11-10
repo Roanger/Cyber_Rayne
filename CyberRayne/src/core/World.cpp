@@ -8,6 +8,7 @@
 #include "../../include/BattleSystem.h"
 #include "../../include/EncounterTable.h"
 #include <iostream>
+#include <algorithm>
 #include <cmath>
 #include <fstream>
 #include <sstream>
@@ -44,7 +45,7 @@ bool World::initialize() {
     return true;
 }
 
-void World::loadMapTextures(VulkanRenderer* renderer) {
+void World::loadMapTextures([[maybe_unused]] VulkanRenderer* renderer) {
 #ifndef NO_VULKAN
     if (!renderer) return;
     
@@ -63,7 +64,7 @@ void World::update(float deltaTime) {
     }
 }
 
-void World::render(VulkanRenderer* renderer) {
+void World::render([[maybe_unused]] VulkanRenderer* renderer) {
 #ifndef NO_VULKAN
     if (m_currentMap) {
         // Update viewport to follow player
@@ -92,8 +93,14 @@ void World::render(VulkanRenderer* renderer) {
 
         for (const auto& enemy : m_currentMap->getEnemies()) {
             if (m_currentMap->worldToNdc(vp, enemy->getX(), enemy->getY(), ndcX, ndcY)) {
-                renderer->renderSprite(ndcX, ndcY, vp.tileWidth * 0.8f, vp.tileHeight * 0.8f,
-                                       1.0f, 0.15f, 0.5f, 1.0f);
+                if (isStoryMarker(enemy.get())) {
+                    // Story fights stand out: larger and gold.
+                    renderer->renderSprite(ndcX, ndcY, vp.tileWidth * 0.95f, vp.tileHeight * 0.95f,
+                                           1.0f, 0.8f, 0.1f, 1.0f);
+                } else {
+                    renderer->renderSprite(ndcX, ndcY, vp.tileWidth * 0.8f, vp.tileHeight * 0.8f,
+                                           1.0f, 0.15f, 0.5f, 1.0f);
+                }
             }
         }
 
@@ -354,6 +361,10 @@ void World::spawnEnemies() {
         // Clear existing enemies
         // In a real implementation, we might want to be more selective about this
         m_currentMap->clearEnemies();
+        // The marker died with the map's enemies; drop the rest of the group.
+        m_storyMarker = nullptr;
+        m_storyEscorts.clear();
+        m_storyTag.clear();
         
         // Spawn new enemies based on the current biome
         spawnEnemiesForBiome(m_currentBiome, m_currentMap);
@@ -364,46 +375,196 @@ void World::checkMapTransition() {
     if (!m_currentMap || !m_player) {
         return;
     }
-    
-    // Get player position
-    int playerTileX = static_cast<int>(m_player->getX());
-    int playerTileY = static_cast<int>(m_player->getY());
-    
-    // Check if player is on a transition tile
-    std::string currentMapName = m_currentMap->getName();
-    
-    if (currentMapName == "Neo-Kyoto Central") {
-        // Transition to Neon Alley (top of map)
-        if (playerTileY <= 1 && playerTileX >= 14 && playerTileX <= 16) {
-            std::cout << "Transitioning to Neon Alley..." << std::endl;
-            changeMap("Neon Alley");
-            m_currentBiome = BiomeType::NEON_ALLEY;
-            m_player->setPosition(15.0f, 23.0f);
+
+    // Wait for the step to finish. Checking mid-step fires while the player is
+    // still between tiles, and used to chain straight through the next map's
+    // exit as the interrupted step kept interpolating.
+    if (m_player->isMoving()) {
+        return;
+    }
+
+    struct Exit {
+        const char* from;
+        int minX, maxX, minY, maxY;
+        const char* to;
+        BiomeType biome;
+        float arriveX, arriveY;
+        // Where to put the player if the destination is locked.
+        float turnBackY;
+    };
+    static const Exit exits[] = {
+        {"Neo-Kyoto Central", 14, 16, 0, 1,   "Neon Alley",        BiomeType::NEON_ALLEY,        15.0f, 23.0f, 2.0f},
+        {"Neon Alley",        14, 16, 24, 24, "Neo-Kyoto Central", BiomeType::NEO_KYOTO_CENTRAL, 15.0f, 2.0f,  23.0f},
+        {"Neon Alley",        14, 16, 0, 1,   "Corporate Plaza",   BiomeType::CORPORATE_PLAZA,   12.0f, 18.0f, 2.0f},
+        {"Corporate Plaza",   11, 13, 19, 19, "Neon Alley",        BiomeType::NEON_ALLEY,        15.0f, 2.0f,  18.0f},
+    };
+
+    const int tileX = static_cast<int>(m_player->getX());
+    const int tileY = static_cast<int>(m_player->getY());
+    const std::string& here = m_currentMap->getName();
+
+    for (const Exit& exit : exits) {
+        if (here != exit.from) continue;
+        if (tileX < exit.minX || tileX > exit.maxX || tileY < exit.minY || tileY > exit.maxY) continue;
+
+        if (isMapLocked(exit.to)) {
+            m_blockedMap = exit.to;
+            m_player->teleport(static_cast<float>(tileX), exit.turnBackY);
+            return;
         }
-    } else if (currentMapName == "Neon Alley") {
-        // Transition back to Central (bottom of map)
-        if (playerTileY >= 24 && playerTileX >= 14 && playerTileX <= 16) {
-            std::cout << "Transitioning to Neo-Kyoto Central..." << std::endl;
-            changeMap("Neo-Kyoto Central");
-            m_currentBiome = BiomeType::NEO_KYOTO_CENTRAL;
-            m_player->setPosition(15.0f, 2.0f);
+
+        std::cout << "Transitioning to " << exit.to << "..." << std::endl;
+        // Biome first: changeMap spawns enemies from the current biome's table.
+        // Move the player before spawning, too, so the spawn search keeps its
+        // distance from where the player actually arrives.
+        m_currentBiome = exit.biome;
+        m_player->teleport(exit.arriveX, exit.arriveY);
+        changeMap(exit.to);
+        return;
+    }
+}
+
+bool World::travelTo(const std::string& mapName, float x, float y) {
+    struct Destination {
+        const char* name;
+        BiomeType biome;
+        float defaultX, defaultY;
+    };
+    static const Destination destinations[] = {
+        {"Neo-Kyoto Central", BiomeType::NEO_KYOTO_CENTRAL, 15.0f, 16.0f},
+        {"Neon Alley",        BiomeType::NEON_ALLEY,        15.0f, 23.0f},
+        {"Corporate Plaza",   BiomeType::CORPORATE_PLAZA,   12.0f, 18.0f},
+    };
+
+    for (const Destination& destination : destinations) {
+        if (mapName != destination.name) continue;
+
+        Map* target = nullptr;
+        for (auto& map : m_maps) {
+            if (map && map->getName() == mapName) target = map.get();
         }
-        // Transition to Corporate Plaza (top of map)
-        if (playerTileY <= 1 && playerTileX >= 14 && playerTileX <= 16) {
-            std::cout << "Transitioning to Corporate Plaza..." << std::endl;
-            changeMap("Corporate Plaza");
-            m_currentBiome = BiomeType::CORPORATE_PLAZA;
-            m_player->setPosition(12.0f, 18.0f);
+        if (!target) return false;
+
+        // A save taken mid-step holds a position between two tiles.
+        float tileX = std::round(x);
+        float tileY = std::round(y);
+        const int ix = static_cast<int>(tileX);
+        const int iy = static_cast<int>(tileY);
+        bool standable = target->isTileWalkable(ix, iy);
+        for (const auto& npc : target->getNPCs()) {
+            if (npc && static_cast<int>(npc->getX()) == ix && static_cast<int>(npc->getY()) == iy) {
+                standable = false;
+            }
         }
-    } else if (currentMapName == "Corporate Plaza") {
-        // Transition back to Neon Alley (bottom of map)
-        if (playerTileY >= 19 && playerTileX >= 11 && playerTileX <= 13) {
-            std::cout << "Transitioning to Neon Alley..." << std::endl;
-            changeMap("Neon Alley");
-            m_currentBiome = BiomeType::NEON_ALLEY;
-            m_player->setPosition(15.0f, 2.0f);
+        if (!standable) {
+            tileX = destination.defaultX;
+            tileY = destination.defaultY;
+        }
+
+        // Same order as a transition: biome and player first, then spawn.
+        m_currentBiome = destination.biome;
+        if (m_player) {
+            m_player->teleport(tileX, tileY);
+        }
+        changeMap(mapName);
+        return true;
+    }
+    return false;
+}
+
+void World::setMapLocked(const std::string& mapName, bool locked) {
+    auto it = std::find(m_lockedMaps.begin(), m_lockedMaps.end(), mapName);
+    if (locked && it == m_lockedMaps.end()) {
+        m_lockedMaps.push_back(mapName);
+    } else if (!locked && it != m_lockedMaps.end()) {
+        m_lockedMaps.erase(it);
+    }
+}
+
+bool World::isMapLocked(const std::string& mapName) const {
+    return std::find(m_lockedMaps.begin(), m_lockedMaps.end(), mapName) != m_lockedMaps.end();
+}
+
+std::string World::consumeBlockedMap() {
+    std::string blocked;
+    blocked.swap(m_blockedMap);
+    return blocked;
+}
+
+NPC* World::findNpcNearPlayer(float maxDistance) const {
+    if (!m_currentMap || !m_player) {
+        return nullptr;
+    }
+    NPC* best = nullptr;
+    float bestDistance = maxDistance;
+    for (const auto& npc : m_currentMap->getNPCs()) {
+        if (!npc || !npc->isInteractable()) continue;
+        float dx = m_player->getX() - npc->getX();
+        float dy = m_player->getY() - npc->getY();
+        float distance = std::sqrt(dx * dx + dy * dy);
+        if (distance <= bestDistance) {
+            bestDistance = distance;
+            best = npc.get();
         }
     }
+    return best;
+}
+
+bool World::isNpcAt(int tileX, int tileY) const {
+    if (!m_currentMap) return false;
+    for (const auto& npc : m_currentMap->getNPCs()) {
+        if (npc && static_cast<int>(npc->getX()) == tileX && static_cast<int>(npc->getY()) == tileY) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool World::ensureStoryEncounter(const std::string& tag, float x, float y,
+                                 const std::vector<std::pair<std::string, int>>& enemies) {
+    if (!m_currentMap || enemies.empty()) {
+        return false;
+    }
+    if (m_storyMarker && m_storyTag == tag) {
+        return true;
+    }
+
+    // Build the whole group before touching the map, so an unknown type name
+    // leaves nothing half-spawned.
+    EncounterTable factory;
+    std::vector<std::unique_ptr<Enemy>> group;
+    for (const auto& entry : enemies) {
+        auto enemy = factory.spawnEnemy({entry.first, 1, entry.second});
+        if (!enemy) {
+            std::cerr << "Unknown story enemy type: " << entry.first << std::endl;
+            return false;
+        }
+        group.push_back(std::move(enemy));
+    }
+
+    // A wandering enemy on the marker's tile would start the wrong fight.
+    const int tileX = static_cast<int>(x);
+    const int tileY = static_cast<int>(y);
+    std::vector<Enemy*> displaced;
+    for (const auto& enemy : m_currentMap->getEnemies()) {
+        if (static_cast<int>(enemy->getX()) == tileX && static_cast<int>(enemy->getY()) == tileY) {
+            displaced.push_back(enemy.get());
+        }
+    }
+    for (Enemy* enemy : displaced) {
+        m_currentMap->removeEnemy(enemy);
+    }
+
+    group.front()->setPosition(x, y);
+    m_storyMarker = group.front().get();
+    m_storyTag = tag;
+    m_currentMap->addEnemy(std::move(group.front()));
+
+    m_storyEscorts.clear();
+    for (std::size_t i = 1; i < group.size(); ++i) {
+        m_storyEscorts.push_back(std::move(group[i]));
+    }
+    return true;
 }
 
 bool World::checkEnemyEncounter() {
@@ -439,6 +600,19 @@ bool World::checkEnemyEncounter() {
         return false;
     }
     m_activeEncounter.push_back(std::move(claimed));
+    m_activeEncounterTag.clear();
+
+    if (triggered == m_storyMarker) {
+        // The marker brings its escorts, and the fight is reported by tag.
+        for (auto& escort : m_storyEscorts) {
+            m_activeEncounter.push_back(std::move(escort));
+        }
+        m_storyEscorts.clear();
+        m_activeEncounterTag = m_storyTag;
+        m_storyMarker = nullptr;
+        m_storyTag.clear();
+    }
+
     m_encounterCooldown = ENCOUNTER_COOLDOWN_STEPS;
     return true;
 }
@@ -463,12 +637,16 @@ bool World::onPlayerStep() {
         return false;
     }
 
-    auto group = table->spawnEncounter(1, 3);
+    // Ambushes are one or two enemies. Simulated battles (see AGENTS.md,
+    // "Combat balance") showed groups of three snowball: the side with more
+    // turns wins outright, with very little middle ground.
+    auto group = table->spawnEncounter(1, 2);
     if (group.empty()) {
         return false;
     }
 
     std::cout << "Ambushed by " << group.size() << " hostile(s)!" << std::endl;
+    m_activeEncounterTag.clear();
     for (auto& enemy : group) {
         m_activeEncounter.push_back(std::move(enemy));
     }
@@ -478,6 +656,7 @@ bool World::onPlayerStep() {
 
 void World::endEncounter() {
     m_activeEncounter.clear();
+    m_activeEncounterTag.clear();
     m_encounterCooldown = ENCOUNTER_COOLDOWN_STEPS;
 
     // Keep the district populated so visible enemies don't run out.
@@ -594,10 +773,10 @@ void World::initializeEncounterTables() {
     auto plaza = std::make_unique<EncounterTable>("Corporate Plaza");
     plaza->setEncounterRate(0.10f);  // Hostile territory — heaviest patrol density.
     plaza->addEntry("SecurityDrone", 30, 3);
-    plaza->addEntry("CombatCyborg", 25, 4);
+    plaza->addEntry("CombatCyborg", 25, 3);
     plaza->addEntry("CorporateEnforcer", 20, 3);
     plaza->addEntry("BlackICE", 15, 3);
-    plaza->addEntry("CorporateEnforcer", 10, 4);
+    plaza->addEntry("CombatCyborg", 10, 4);
     m_encounterTables.push_back(std::move(plaza));
 }
 

@@ -6,9 +6,12 @@
 
 #include <string>
 
+#include "Inventory.h"
+
 class Party;
 class Enemy;
 class Combatant;
+class Player;
 class Ability;
 class Item;
 
@@ -28,8 +31,10 @@ public:
     struct ActionRequest {
         BattleAction action = BattleAction::ATTACK;
         int abilityIndex = -1;  // Index into the actor's ability list
-        int itemIndex = -1;     // Index into the actor's inventory
-        int targetIndex = -1;   // Index into the relevant side; -1 auto-targets
+        int itemIndex = -1;     // Index into the party bag's consumable stacks
+        // Index into the relevant side; -1 auto-targets. For items it indexes
+        // every party member, living or not, since some items raise the fallen.
+        int targetIndex = -1;
 
         static ActionRequest attack(int targetIndex = -1);
         static ActionRequest ability(int abilityIndex, int targetIndex = -1);
@@ -99,7 +104,11 @@ private:
     void executePlayerAction(Combatant* actor, const ActionRequest& request);
 
     void executeAttack(Combatant* actor, Combatant* target);
-    void executeItem(Combatant* actor, int itemIndex, Combatant* target);
+    void executeItem(Combatant* actor, int itemIndex, Player* target);
+    // The itemIndex-th consumable stack in the party bag, or nullptr.
+    const Inventory::Stack* getBattleItem(int itemIndex) const;
+    // targetIndex is a party member index; -1 means the actor themselves.
+    Player* getItemTarget(Combatant* actor, int targetIndex) const;
     void executeDefend(Combatant* actor);
     void executeFlee();
 

@@ -113,10 +113,10 @@ void VulkanRenderer::renderColoredRectPixels(int leftPx, int topPx, int widthPx,
 
 // Debug messenger helpers
 VKAPI_ATTR VkBool32 VKAPI_CALL VulkanRenderer::debugCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT messageType,
+    VkDebugUtilsMessageSeverityFlagBitsEXT /*messageSeverity*/,
+    VkDebugUtilsMessageTypeFlagsEXT /*messageType*/,
     const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData) {
+    void* /*pUserData*/) {
     std::cerr << "[Vulkan Validation] " << pCallbackData->pMessage << std::endl;
     return VK_FALSE;
 }
@@ -177,6 +177,9 @@ VulkanRenderer::VulkanRenderer()
 #ifdef _WIN32
       m_hInstance(GetModuleHandle(nullptr)),
 #endif
+      m_windowWidth(1920),
+      m_windowHeight(1080),
+      m_running(false),
       m_instance(VK_NULL_HANDLE),
       m_debugMessenger(VK_NULL_HANDLE),
       m_physicalDevice(VK_NULL_HANDLE),
@@ -187,10 +190,6 @@ VulkanRenderer::VulkanRenderer()
       m_swapChain(VK_NULL_HANDLE),
       m_renderPass(VK_NULL_HANDLE),
       m_commandPool(VK_NULL_HANDLE),
-      m_currentFrame(0),
-      m_windowWidth(1920),
-      m_windowHeight(1080),
-      m_running(false),
       m_spritesToRender(0) {
     // Initialize vectors
     m_swapChainImages.resize(0);
@@ -749,11 +748,30 @@ bool VulkanRenderer::pickPhysicalDevice() {
     std::vector<VkPhysicalDevice> devices(deviceCount);
     vkEnumeratePhysicalDevices(m_instance, &deviceCount, devices.data());
 
-    // Use the first suitable device
+    // Prefer a discrete GPU over an integrated one, and either over a software
+    // rasterizer. Enumeration order is driver-defined, so "first suitable" can
+    // land on the iGPU on a machine that has both.
+    auto rankDevice = [](VkPhysicalDeviceType type) {
+        switch (type) {
+            case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:   return 4;
+            case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: return 3;
+            case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:    return 2;
+            case VK_PHYSICAL_DEVICE_TYPE_CPU:            return 1;
+            default:                                     return 0;
+        }
+    };
+
+    int bestRank = -1;
+    VkPhysicalDeviceProperties bestProps{};
     for (const auto& device : devices) {
-        if (isDeviceSuitable(device)) {
+        if (!isDeviceSuitable(device)) continue;
+        VkPhysicalDeviceProperties props;
+        vkGetPhysicalDeviceProperties(device, &props);
+        int rank = rankDevice(props.deviceType);
+        if (rank > bestRank) {
+            bestRank = rank;
+            bestProps = props;
             m_physicalDevice = device;
-            break;
         }
     }
 
@@ -762,7 +780,7 @@ bool VulkanRenderer::pickPhysicalDevice() {
         return false;
     }
 
-    std::cout << "Physical device picked successfully." << std::endl;
+    std::cout << "Physical device picked: " << bestProps.deviceName << std::endl;
     return true;
 }
 
@@ -868,8 +886,6 @@ bool VulkanRenderer::createSwapChain() {
     createInfo.imageExtent = extent;
     createInfo.imageArrayLayers = 1;
     createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-    uint32_t queueFamilyIndices[] = { m_graphicsQueueFamilyIndex };
 
     createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
     createInfo.queueFamilyIndexCount = 0; // Optional
@@ -1134,23 +1150,6 @@ void VulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
         throw std::runtime_error("failed to record command buffer!");
     }
-}
-
-// This is a placeholder for actual sprite rendering
-// In a real implementation, we would use vertex buffers, shaders, and textures
-void VulkanRenderer::renderColoredRect(VkCommandBuffer commandBuffer, float x, float y, float width, float height, float r, float g, float b) {
-    // For now, we're just drawing a solid color to the entire screen
-    // In the future, we'll implement proper sprite rendering with vertex buffers and shaders
-    // This would involve:
-    // 1. Creating vertex buffers for the rectangle
-    // 2. Setting up a graphics pipeline with shaders
-    // 3. Binding the vertex buffer and pipeline
-    // 4. Drawing the rectangle with vkCmdDraw
-    // For now, we'll just change the clear color based on the position
-    // This is just for demonstration purposes
-    VkClearValue clearColor = { {{r, g, b, 1.0f}} };
-    // Note: We can't actually change the clear color here as it's set in the render pass
-    // This is just to show where actual rendering code would go
 }
 
 void VulkanRenderer::renderSpriteWithTexture(float x, float y, float width, float height, int textureIndex,
@@ -1435,7 +1434,7 @@ VkImageView VulkanRenderer::createImageView(VkImage image, VkFormat format) {
     return imageView;
 }
 
-void VulkanRenderer::transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout) {
+void VulkanRenderer::transitionImageLayout(VkImage image, VkFormat /*format*/, VkImageLayout oldLayout, VkImageLayout newLayout) {
     VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
     VkImageMemoryBarrier barrier{};

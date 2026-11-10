@@ -1,4 +1,7 @@
 #include "../../include/InputConfig.h"
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <sstream>
 #include <iostream>
 
@@ -114,9 +117,9 @@ std::string InputConfig::serialize() const {
 }
 
 bool InputConfig::deserialize(const std::string& data) {
-    m_keyToAction.clear();
-    m_actionToKey.clear();
-    m_bindingList.clear();
+    std::unordered_map<int, InputAction> keyToAction;
+    std::unordered_map<int, int> actionToKey;
+    std::vector<std::pair<int, InputAction>> bindingList;
 
     std::istringstream iss(data);
     std::string token;
@@ -124,12 +127,156 @@ bool InputConfig::deserialize(const std::string& data) {
         if (token.empty()) continue;
         size_t colon = token.find(':');
         if (colon == std::string::npos) continue;
-        int key = std::stoi(token.substr(0, colon));
-        int actionVal = std::stoi(token.substr(colon + 1));
+        int key = 0;
+        int actionVal = 0;
+        try {
+            key = std::stoi(token.substr(0, colon));
+            actionVal = std::stoi(token.substr(colon + 1));
+        } catch (const std::exception&) {
+            return false;
+        }
+        if (actionVal < 0 || actionVal >= static_cast<int>(allActions().size())) {
+            return false;
+        }
         InputAction action = static_cast<InputAction>(actionVal);
-        m_keyToAction[key] = action;
-        m_actionToKey[static_cast<int>(action)] = key;
-        m_bindingList.push_back({key, action});
+        keyToAction[key] = action;
+        actionToKey[actionVal] = key;
+        bindingList.push_back({key, action});
     }
-    return !m_bindingList.empty();
+    if (bindingList.empty()) {
+        return false;
+    }
+
+    // Commit only once the whole string has parsed, so bad data never leaves
+    // the config half-replaced.
+    m_keyToAction = std::move(keyToAction);
+    m_actionToKey = std::move(actionToKey);
+    m_bindingList = std::move(bindingList);
+    return true;
+}
+
+bool InputConfig::isComplete() const {
+    if (m_keyToAction.size() != allActions().size()) {
+        return false;
+    }
+    for (InputAction action : allActions()) {
+        auto it = m_actionToKey.find(static_cast<int>(action));
+        if (it == m_actionToKey.end()) return false;
+        auto back = m_keyToAction.find(it->second);
+        if (back == m_keyToAction.end() || back->second != action) return false;
+    }
+    return true;
+}
+
+std::string InputConfig::defaultConfigPath() {
+    namespace fs = std::filesystem;
+    fs::path dir;
+#ifdef _WIN32
+    if (const char* appData = std::getenv("APPDATA"); appData && *appData) {
+        dir = fs::path(appData) / "CyberRayne";
+    }
+#else
+    if (const char* xdg = std::getenv("XDG_CONFIG_HOME"); xdg && *xdg) {
+        dir = fs::path(xdg) / "CyberRayne";
+    } else if (const char* home = std::getenv("HOME"); home && *home) {
+        dir = fs::path(home) / ".config" / "CyberRayne";
+    }
+#endif
+    return (dir / "input.cfg").string();
+}
+
+bool InputConfig::loadFromFile(const std::string& path) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        return false;
+    }
+    std::string data;
+    std::getline(file, data);
+
+    // Try it on a copy: a file that parses but leaves an action unbound or a
+    // key shared would lock the player out of that action.
+    InputConfig candidate;
+    if (!candidate.deserialize(data) || !candidate.isComplete()) {
+        std::cerr << "Ignoring unusable key bindings in " << path << "; using defaults." << std::endl;
+        return false;
+    }
+    *this = candidate;
+    return true;
+}
+
+bool InputConfig::saveToFile(const std::string& path) const {
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path target(path);
+    if (target.has_parent_path()) {
+        fs::create_directories(target.parent_path(), ec);
+    }
+    std::ofstream file(path);
+    if (!file.is_open()) {
+        std::cerr << "Failed to write key bindings to " << path << std::endl;
+        return false;
+    }
+    file << serialize() << "\n";
+    return file.good();
+}
+
+const std::vector<InputAction>& InputConfig::allActions() {
+    static const std::vector<InputAction> kActions = {
+        InputAction::MOVE_UP, InputAction::MOVE_DOWN, InputAction::MOVE_LEFT, InputAction::MOVE_RIGHT,
+        InputAction::CONFIRM, InputAction::CANCEL, InputAction::OPEN_MENU, InputAction::PAUSE};
+    return kActions;
+}
+
+const char* InputConfig::actionName(InputAction action) {
+    switch (action) {
+        case InputAction::MOVE_UP:    return "Move Up";
+        case InputAction::MOVE_DOWN:  return "Move Down";
+        case InputAction::MOVE_LEFT:  return "Move Left";
+        case InputAction::MOVE_RIGHT: return "Move Right";
+        case InputAction::CONFIRM:    return "Confirm / Talk";
+        case InputAction::CANCEL:     return "Cancel";
+        case InputAction::OPEN_MENU:  return "Menu";
+        case InputAction::PAUSE:      return "Pause";
+    }
+    return "?";
+}
+
+int InputConfig::escapeKey() {
+    return KEY_ESC;
+}
+
+std::string InputConfig::keyName(int key) {
+    if (key == KEY_UP) return "Up";
+    if (key == KEY_DOWN) return "Down";
+    if (key == KEY_LEFT) return "Left";
+    if (key == KEY_RIGHT) return "Right";
+    if (key == KEY_ENTER) return "Enter";
+    if (key == KEY_ESC) return "Esc";
+    if (key == 32) return "Space";
+#ifndef _WIN32
+    // GLFW codes for the common non-printing keys.
+    switch (key) {
+        case 258: return "Tab";
+        case 259: return "Backspace";
+        case 260: return "Insert";
+        case 261: return "Delete";
+        case 340: return "Left Shift";
+        case 341: return "Left Ctrl";
+        case 342: return "Left Alt";
+        case 344: return "Right Shift";
+        case 345: return "Right Ctrl";
+        case 346: return "Right Alt";
+        default: break;
+    }
+    if (key >= 290 && key <= 301) return "F" + std::to_string(key - 289);
+    if (key >= 320 && key <= 329) return "Numpad " + std::to_string(key - 320);
+#endif
+    // Letters and digits share their ASCII codes on both platforms.
+    if ((key >= 'A' && key <= 'Z') || (key >= '0' && key <= '9')) {
+        return std::string(1, static_cast<char>(key));
+    }
+    if (key > 32 && key < 127) {
+        return std::string(1, static_cast<char>(key));
+    }
+    return "Key " + std::to_string(key);
 }

@@ -3,12 +3,14 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <utility>
 
 class Map;
 class Player;
 class Enemy;
 class VulkanRenderer;
 class EncounterTable;
+class NPC;
 
 class World {
 public:
@@ -68,6 +70,29 @@ public:
     // Release the battle group. Call when the battle ends, however it ended.
     void endEncounter();
 
+    // Story encounters: a fixed fight standing at a known tile. The first enemy
+    // is visible on the map; the rest join when the player walks into it.
+    // Does nothing if an encounter with this tag is already standing. Returns
+    // false if any enemy type is unknown.
+    bool ensureStoryEncounter(const std::string& tag, float x, float y,
+                              const std::vector<std::pair<std::string, int>>& enemies);
+    bool hasStoryEncounter() const { return m_storyMarker != nullptr; }
+    bool isStoryMarker(const Enemy* enemy) const { return enemy != nullptr && enemy == m_storyMarker; }
+    // Tag of the story encounter being fought, or empty for an ordinary battle.
+    const std::string& getActiveEncounterTag() const { return m_activeEncounterTag; }
+
+    // Locked maps cannot be entered; the player is turned back at the edge.
+    void setMapLocked(const std::string& mapName, bool locked);
+    bool isMapLocked(const std::string& mapName) const;
+    // Name of the locked map the player just tried to enter. Empty if none;
+    // cleared on read.
+    std::string consumeBlockedMap();
+
+    // NPCs
+    // The closest interactable NPC within maxDistance tiles of the player.
+    NPC* findNpcNearPlayer(float maxDistance) const;
+    bool isNpcAt(int tileX, int tileY) const;
+
     // Steps to suppress random rolls after a battle, so wins don't chain.
     static constexpr int ENCOUNTER_COOLDOWN_STEPS = 8;
     // Keep at least this many visible enemies per district.
@@ -77,6 +102,11 @@ public:
 
     // Map transitions
     void checkMapTransition();
+
+    // Put the player on a named map at a tile, e.g. when loading a save. If the
+    // tile is not somewhere a player can stand, the map's arrival point is used
+    // instead. Returns false if there is no such map.
+    bool travelTo(const std::string& mapName, float x, float y);
 
     // Encounter table access
     const EncounterTable* getEncounterTable(BiomeType biome) const;
@@ -101,5 +131,15 @@ private:
     std::vector<std::unique_ptr<EncounterTable>> m_encounterTables;
 
     std::vector<std::unique_ptr<Enemy>> m_activeEncounter;
+    std::string m_activeEncounterTag;
+
+    // The standing story encounter on the current map, if any. The marker is
+    // owned by the map; the escorts wait here until the fight starts.
+    std::string m_storyTag;
+    Enemy* m_storyMarker = nullptr;
+    std::vector<std::unique_ptr<Enemy>> m_storyEscorts;
+
+    std::vector<std::string> m_lockedMaps;
+    std::string m_blockedMap;
     int m_encounterCooldown = ENCOUNTER_COOLDOWN_STEPS;
 };

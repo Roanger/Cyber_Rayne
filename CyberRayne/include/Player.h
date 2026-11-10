@@ -76,6 +76,11 @@ public:
     void setHealth(int health) override { m_health = health; }
     void setMana(int mana) override { m_mana = mana; }
     void setPosition(float x, float y) { m_x = x; m_y = y; }
+    // Place the player on a tile and cancel any step in progress. Use this for
+    // map transitions: setPosition alone leaves the interpolation running, and
+    // the next update() drags the player back toward the old target.
+    void teleport(float x, float y);
+    bool isMoving() const { return m_isMoving; }
     
     // True once per completed tile-to-tile move, cleared on read. Drives
     // step-based random encounters.
@@ -91,11 +96,6 @@ public:
     // Combat functions
     void takeDamage(int damage) override;
     void heal(int amount) override;
-
-    // Inventory management
-    void addItem(std::unique_ptr<Item> item);
-    void removeItem(const Item* item);
-    const std::vector<std::unique_ptr<Item>>& getInventory() const { return m_inventory; }
 
     // Grant every ability this class has unlocked at its current level.
     // Idempotent, so it is safe to call after loading a save.
@@ -154,7 +154,6 @@ private:
     
     int m_textureIndex;
 
-    std::vector<std::unique_ptr<Item>> m_inventory;
     std::unique_ptr<Item> m_equippedWeapon;
     std::unique_ptr<Item> m_equippedArmor;
 };

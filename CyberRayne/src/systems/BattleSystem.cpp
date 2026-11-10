@@ -262,10 +262,16 @@ bool BattleSystem::submitPlayerAction(const ActionRequest& request) {
             return false;
         }
     } else if (request.action == BattleAction::ITEM) {
-        Player* player = static_cast<Player*>(m_currentActor);
-        const auto& items = player->getInventory();
-        if (request.itemIndex < 0 || request.itemIndex >= static_cast<int>(items.size())) {
+        const Inventory::Stack* stack = getBattleItem(request.itemIndex);
+        if (!stack) {
             m_lastRejection = "That item does not exist.";
+            return false;
+        }
+        // Items can target the fallen, so the index covers every member, not
+        // just the living. -1 means the actor.
+        const Player* target = getItemTarget(m_currentActor, request.targetIndex);
+        if (!target || !stack->prototype->canUseOn(target)) {
+            m_lastRejection = stack->prototype->getName() + " would have no effect.";
             return false;
         }
     }
@@ -395,12 +401,7 @@ void BattleSystem::executePlayerAction(Combatant* actor, const ActionRequest& re
             break;
         }
         case BattleAction::ITEM: {
-            auto allies = getLivingAllies();
-            Combatant* target = actor;
-            if (request.targetIndex >= 0 && request.targetIndex < static_cast<int>(allies.size())) {
-                target = allies[request.targetIndex];
-            }
-            executeItem(actor, request.itemIndex, target);
+            executeItem(actor, request.itemIndex, getItemTarget(actor, request.targetIndex));
             break;
         }
         case BattleAction::DEFEND:
@@ -429,11 +430,43 @@ void BattleSystem::executeAttack(Combatant* actor, Combatant* target) {
     target->takeDamage(damage);
 }
 
-void BattleSystem::executeItem(Combatant* actor, int itemIndex, Combatant* target) {
-    Player* player = static_cast<Player*>(actor);
-    Item* item = player->getInventory()[itemIndex].get();
-    std::cout << player->getName() << " uses " << item->getName() << " on " << target->getName() << std::endl;
-    item->use(static_cast<Player*>(target));
+const Inventory::Stack* BattleSystem::getBattleItem(int itemIndex) const {
+    if (!m_party || itemIndex < 0) {
+        return nullptr;
+    }
+    const auto consumables = m_party->getBag().getStacksOfType(Item::ItemType::CONSUMABLE);
+    if (itemIndex >= static_cast<int>(consumables.size())) {
+        return nullptr;
+    }
+    return consumables[static_cast<std::size_t>(itemIndex)];
+}
+
+Player* BattleSystem::getItemTarget(Combatant* actor, int targetIndex) const {
+    if (!m_party) {
+        return nullptr;
+    }
+    if (targetIndex >= 0) {
+        return m_party->getMember(static_cast<std::size_t>(targetIndex));
+    }
+    for (const auto& member : m_party->getMembers()) {
+        if (member.get() == actor) {
+            return member.get();
+        }
+    }
+    return nullptr;
+}
+
+void BattleSystem::executeItem(Combatant* actor, int itemIndex, Player* target) {
+    const Inventory::Stack* stack = getBattleItem(itemIndex);
+    if (!actor || !stack || !target) {
+        return;
+    }
+    // Copy the ID: consuming the last one frees the stack.
+    const std::string itemId = stack->id;
+    std::cout << actor->getName() << " uses " << stack->prototype->getName() << " on "
+              << target->getName() << std::endl;
+    stack->prototype->use(target);
+    m_party->getBag().remove(itemId, 1);
 }
 
 void BattleSystem::executeDefend(Combatant* actor) {

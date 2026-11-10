@@ -1,0 +1,45 @@
+# Build and gameplay tests. Self-contained: needs no secrets or private repos.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    name: Build and test (${{ matrix.preset }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        preset: [linux-debug, linux-release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build build-essential \
+            libvulkan-dev libglfw3-dev glslang-tools
+
+      - name: Configure
+        run: cmake -S CyberRayne --preset ${{ matrix.preset }}
+
+      - name: Build
+        run: cmake --build CyberRayne/out/build/${{ matrix.preset }}
+
+      - name: Test
+        run: ctest --test-dir CyberRayne/out/build/${{ matrix.preset }} --output-on-failure
+
+  assets:
+    name: Asset validation
+    runs-on: ubuntu-24.04
+    # Every sprite on disk is still placeholder art, so this reports without
+    # failing the run. Make it blocking when phase 11 (slice art) lands.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - run: pip install pillow
+      - run: python3 CyberRayne/tools/validate_assets.py

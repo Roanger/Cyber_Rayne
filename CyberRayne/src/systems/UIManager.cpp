@@ -99,19 +99,33 @@ void UIManager::refreshEntries() {
         }
 
         case BattleMenuState::ITEM_SELECTION: {
-            const Player* player = (m_currentActor && m_currentActor->isPlayer())
-                                       ? static_cast<const Player*>(m_currentActor)
-                                       : nullptr;
-            if (!player) break;
-            for (const auto& item : player->getInventory()) {
-                if (item) {
-                    m_entries.push_back({item->getName(), true});
-                }
+            if (!m_party) break;
+            // Same order BattleSystem resolves itemIndex against.
+            for (const Inventory::Stack* stack : m_party->getBag().getStacksOfType(Item::ItemType::CONSUMABLE)) {
+                m_entries.push_back({stack->prototype->getName() + "  x" + std::to_string(stack->count), true});
             }
             break;
         }
 
         case BattleMenuState::TARGET_SELECTION:
+            if (m_pendingItemIndex >= 0) {
+                // Items go to allies, including the fallen. Entries line up
+                // with party member indices.
+                if (m_party) {
+                    for (const auto& member : m_party->getMembers()) {
+                        if (!member) continue;
+                        std::ostringstream oss;
+                        oss << member->getName() << "  ";
+                        if (member->isAlive()) {
+                            oss << member->getHealth() << "/" << member->getMaxHealth();
+                        } else {
+                            oss << "DOWN";
+                        }
+                        m_entries.push_back({oss.str(), true});
+                    }
+                }
+                break;
+            }
             for (Combatant* target : m_targets) {
                 if (target && target->isAlive()) {
                     std::ostringstream oss;
@@ -158,7 +172,7 @@ void UIManager::confirmCurrentEntry() {
         return;
     }
     if (!m_entries[m_menuIndex].enabled) {
-        m_statusMessage = "Not enough MP.";
+        m_statusMessage = "Not available.";
         return;
     }
 
@@ -213,11 +227,16 @@ void UIManager::confirmCurrentEntry() {
 
         case BattleMenuState::ITEM_SELECTION:
             m_pendingItemIndex = m_menuIndex;
-            commit(ActionRequest::item(m_pendingItemIndex, -1));
+            m_pendingAbilityIndex = -1;
+            m_battleState = BattleMenuState::TARGET_SELECTION;
+            m_menuIndex = 0;
+            refreshEntries();
             break;
 
         case BattleMenuState::TARGET_SELECTION:
-            if (m_pendingAbilityIndex >= 0) {
+            if (m_pendingItemIndex >= 0) {
+                commit(ActionRequest::item(m_pendingItemIndex, m_menuIndex));
+            } else if (m_pendingAbilityIndex >= 0) {
                 commit(ActionRequest::ability(m_pendingAbilityIndex, m_menuIndex));
             } else {
                 commit(ActionRequest::attack(m_menuIndex));
@@ -282,7 +301,7 @@ void UIManager::renderBattleUI(VulkanRenderer* renderer, Party* party, const std
             m_targets.push_back(enemy);
         }
     }
-    if (m_battleState == BattleMenuState::TARGET_SELECTION &&
+    if (m_battleState == BattleMenuState::TARGET_SELECTION && m_pendingItemIndex < 0 &&
         static_cast<int>(m_targets.size()) != static_cast<int>(m_entries.size())) {
         refreshEntries();
     }

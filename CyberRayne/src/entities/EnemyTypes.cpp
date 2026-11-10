@@ -189,8 +189,8 @@ void StreetThug::initializeStats() {
     m_mana = m_maxMana;
     m_strength = 14 + (m_level * 2);
     m_magic = 3 + m_level;
-    m_speed = 16 + (m_level * 3);
-    m_defense = 8 + static_cast<int>(m_level * 1.5);
+    m_speed = 12 + (m_level * 2);
+    m_defense = 6 + m_level;
     m_experienceReward = 18 + (m_level * 3);
     m_goldReward = 8 + (m_level * 2);
 }
@@ -200,14 +200,14 @@ SecurityDrone::SecurityDrone(int level) : Enemy("Security Drone", level) {
 }
 
 void SecurityDrone::initializeStats() {
-    m_maxHealth = 60 + (m_level * 11);
+    m_maxHealth = 50 + (m_level * 9);
     m_health = m_maxHealth;
     m_maxMana = 30 + (m_level * 5);
     m_mana = m_maxMana;
-    m_strength = 16 + static_cast<int>(m_level * 2.5);
+    m_strength = 13 + (m_level * 2);
     m_magic = 10 + static_cast<int>(m_level * 1.5);
-    m_speed = 20 + (m_level * 3);
-    m_defense = 12 + (m_level * 2);
+    m_speed = 14 + (m_level * 2);
+    m_defense = 8 + static_cast<int>(m_level * 1.5);
     m_experienceReward = 25 + (m_level * 4);
     m_goldReward = 10 + (m_level * 2);
 }
@@ -223,7 +223,7 @@ void BlackICE::initializeStats() {
     m_mana = m_maxMana;
     m_strength = 8 + static_cast<int>(m_level * 1.5);
     m_magic = 22 + (m_level * 3);
-    m_speed = 18 + (m_level * 2);
+    m_speed = 13 + (m_level * 2);
     m_defense = 6 + (m_level * 1);
     m_experienceReward = 30 + (m_level * 5);
     m_goldReward = 15 + (m_level * 3);
@@ -234,14 +234,14 @@ CombatCyborg::CombatCyborg(int level) : Enemy("Combat Cyborg", level) {
 }
 
 void CombatCyborg::initializeStats() {
-    m_maxHealth = 100 + (m_level * 18);
+    m_maxHealth = 85 + (m_level * 14);
     m_health = m_maxHealth;
     m_maxMana = 40 + (m_level * 6);
     m_mana = m_maxMana;
-    m_strength = 24 + (m_level * 3);
+    m_strength = 19 + static_cast<int>(m_level * 2.5);
     m_magic = 12 + (m_level * 2);
-    m_speed = 14 + (m_level * 2);
-    m_defense = 20 + (m_level * 3);
+    m_speed = 10 + static_cast<int>(m_level * 1.5);
+    m_defense = 13 + (m_level * 2);
     m_experienceReward = 45 + (m_level * 7);
     m_goldReward = 18 + (m_level * 3);
 }
@@ -251,14 +251,14 @@ CorporateEnforcer::CorporateEnforcer(int level) : Enemy("Corporate Enforcer", le
 }
 
 void CorporateEnforcer::initializeStats() {
-    m_maxHealth = 130 + (m_level * 22);
+    m_maxHealth = 130 + (m_level * 16);
     m_health = m_maxHealth;
     m_maxMana = 50 + (m_level * 8);
     m_mana = m_maxMana;
-    m_strength = 28 + static_cast<int>(m_level * 3.5);
+    m_strength = 22 + (m_level * 3);
     m_magic = 15 + static_cast<int>(m_level * 2);
-    m_speed = 10 + (m_level * 2);
-    m_defense = 25 + (m_level * 4);
+    m_speed = 9 + static_cast<int>(m_level * 1.5);
+    m_defense = 15 + static_cast<int>(m_level * 2.5);
     m_experienceReward = 60 + (m_level * 9);
     m_goldReward = 25 + (m_level * 4);
 }

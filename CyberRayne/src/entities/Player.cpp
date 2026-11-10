@@ -36,8 +36,8 @@ bool Player::isValidClassOrdinal(int ordinal) {
 }
 
 Player::Player(CharacterClass charClass, const std::string& name)
-    : m_characterClass(charClass), m_name(name), m_level(1), m_health(100), m_mana(50),
-      m_maxHealth(100), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
+    : m_characterClass(charClass), m_name(name), m_level(1), m_health(100), m_maxHealth(100),
+      m_mana(50), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
       m_experience(0), m_gold(0),
       m_x(0.0f), m_y(0.0f), m_startX(0.0f), m_startY(0.0f), m_targetX(0.0f), m_targetY(0.0f), 
       m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(8.0f), m_textureIndex(-1) {
@@ -48,7 +48,7 @@ Player::Player(CharacterClass charClass, const std::string& name)
 // Default constructor
 Player::Player() 
     : m_characterClass(CharacterClass::SOLO), m_name("DefaultPlayer"), m_level(1),
-      m_health(100), m_mana(50), m_maxHealth(100), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
+      m_health(100), m_maxHealth(100), m_mana(50), m_maxMana(50), m_strength(10), m_magic(10), m_speed(10), m_defense(10),
       m_experience(0), m_gold(0),
       m_x(0.0f), m_y(0.0f), m_startX(0.0f), m_startY(0.0f), m_targetX(0.0f), m_targetY(0.0f),
       m_isMoving(false), m_moveProgress(0.0f), m_moveSpeed(8.0f), m_textureIndex(-1) {
@@ -182,21 +182,6 @@ void Player::heal(int amount) {
     std::cout << m_name << " healed for " << amount << " HP. HP: " << m_health << "/" << m_maxHealth << std::endl;
 }
 
-void Player::addItem(std::unique_ptr<Item> item) {
-    std::cout << m_name << " picked up " << item->getName() << std::endl;
-    m_inventory.push_back(std::move(item));
-}
-
-void Player::removeItem(const Item* item) {
-    auto it = std::find_if(m_inventory.begin(), m_inventory.end(), [item](const auto& entry) {
-        return entry.get() == item;
-    });
-    if (it != m_inventory.end()) {
-        std::cout << m_name << " removed " << (*it)->getName() << " from inventory" << std::endl;
-        m_inventory.erase(it);
-    }
-}
-
 void Player::refreshAbilities() {
     for (const Ability* ability : AbilityRegistry::unlockedFor(m_characterClass, m_level)) {
         if (!knowsAbility(ability)) {
@@ -267,6 +252,18 @@ void Player::move(float dx, float dy, Map* map) {
     } else {
         std::cout << m_name << " cannot move there - tile is blocked!" << std::endl;
     }
+}
+
+void Player::teleport(float x, float y) {
+    m_x = x;
+    m_y = y;
+    m_startX = x;
+    m_startY = y;
+    m_targetX = x;
+    m_targetY = y;
+    m_isMoving = false;
+    m_moveProgress = 0.0f;
+    m_stepCompleted = false;
 }
 
 void Player::moveUp(Map* map) {

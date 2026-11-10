@@ -80,16 +80,9 @@ void Map::loadTileTextures(VulkanRenderer* renderer) {
 }
 #endif
 
-void Map::update(float deltaTime) {
-    // Update all enemies
-    for (auto& enemy : m_enemies) {
-        // In a real implementation, we would update enemy AI here
-    }
-    
-    // Update all NPCs
-    for (auto& npc : m_npcs) {
-        // In a real implementation, we would update NPC behavior here
-    }
+void Map::update(float /*deltaTime*/) {
+    // Enemies and NPCs are static on the map for now; AI and patrol behaviour
+    // will hook in here.
 }
 
 Map::Viewport Map::getViewport(float screenAspect) const {

@@ -37,6 +37,25 @@ public:
     std::string serialize() const;
     bool deserialize(const std::string& data);
 
+    // Load bindings from a file. A missing or unusable file leaves the
+    // defaults in place and returns false.
+    bool loadFromFile(const std::string& path);
+    // Creates missing directories.
+    bool saveToFile(const std::string& path) const;
+    // $XDG_CONFIG_HOME/CyberRayne/input.cfg (normally ~/.config/CyberRayne/).
+    static std::string defaultConfigPath();
+
+    // True when every action has exactly one key and no key is shared.
+    bool isComplete() const;
+
+    // Human-readable names for the settings screen.
+    static std::string keyName(int key);
+    static const char* actionName(InputAction action);
+    // Every rebindable action, in display order.
+    static const std::vector<InputAction>& allActions();
+    // The key that cancels a rebind in progress; it cannot be reassigned away.
+    static int escapeKey();
+
     // Sentinel for "no action."
     static constexpr InputAction NO_ACTION = static_cast<InputAction>(-1);
 

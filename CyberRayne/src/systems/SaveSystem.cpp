@@ -1,12 +1,15 @@
 #include "../../include/SaveSystem.h"
 #include "../../include/Party.h"
 #include "../../include/Player.h"
+#include "../../include/Inventory.h"
+#include "../../include/Item.h"
 #include "../../include/QuestLog.h"
 #include "../../include/Quest.h"
 
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <cstdlib>
 #include <filesystem>
 #include <unordered_map>
 
@@ -31,10 +34,33 @@ bool SaveSystem::saveExists(const std::string& filepath) const {
     return std::filesystem::exists(filepath);
 }
 
-bool SaveSystem::saveGame(const std::string& filepath, Party* party, QuestLog* questLog) {
+std::string SaveSystem::defaultSavePath() {
+    namespace fs = std::filesystem;
+    fs::path dir;
+#ifdef _WIN32
+    if (const char* appData = std::getenv("APPDATA"); appData && *appData) {
+        dir = fs::path(appData) / "CyberRayne";
+    }
+#else
+    if (const char* xdg = std::getenv("XDG_DATA_HOME"); xdg && *xdg) {
+        dir = fs::path(xdg) / "CyberRayne";
+    } else if (const char* home = std::getenv("HOME"); home && *home) {
+        dir = fs::path(home) / ".local" / "share" / "CyberRayne";
+    }
+#endif
+    return (dir / "savegame.txt").string();
+}
+
+bool SaveSystem::saveGame(const std::string& filepath, Party* party, QuestLog* questLog,
+                          const SaveWorldState* world) {
     std::string output;
     output += "[SAVEFILE]\n";
-    output += "version=1\n";
+    output += "version=2\n";
+
+    if (world) {
+        output += "[WORLD]\n";
+        output += "map=" + world->mapName + "\n";
+    }
 
     if (party) {
         serializeParty(output, party);
@@ -43,17 +69,41 @@ bool SaveSystem::saveGame(const std::string& filepath, Party* party, QuestLog* q
         serializeQuestLog(output, questLog);
     }
 
-    std::ofstream file(filepath);
-    if (!file.is_open()) {
-        std::cerr << "Failed to open save file for writing: " << filepath << std::endl;
+    // Write to a temporary file and rename it over the real one, so a crash
+    // or full disk mid-write cannot destroy the previous save.
+    namespace fs = std::filesystem;
+    std::error_code ec;
+    const fs::path target(filepath);
+    if (target.has_parent_path()) {
+        fs::create_directories(target.parent_path(), ec);
+    }
+
+    const fs::path temp = fs::path(filepath + ".tmp");
+    {
+        std::ofstream file(temp);
+        if (!file.is_open()) {
+            std::cerr << "Failed to open save file for writing: " << temp.string() << std::endl;
+            return false;
+        }
+        file << output;
+        file.flush();
+        if (!file.good()) {
+            std::cerr << "Failed while writing save file: " << temp.string() << std::endl;
+            return false;
+        }
+    }
+
+    fs::rename(temp, target, ec);
+    if (ec) {
+        std::cerr << "Failed to move save file into place: " << ec.message() << std::endl;
+        fs::remove(temp, ec);
         return false;
     }
-    file << output;
-    file.close();
     return true;
 }
 
-bool SaveSystem::loadGame(const std::string& filepath, Party* party, QuestLog* questLog) {
+bool SaveSystem::loadGame(const std::string& filepath, Party* party, QuestLog* questLog,
+                          SaveWorldState* world) {
     if (!saveExists(filepath)) {
         std::cerr << "Save file does not exist: " << filepath << std::endl;
         return false;
@@ -78,6 +128,27 @@ bool SaveSystem::loadGame(const std::string& filepath, Party* party, QuestLog* q
     }
     if (questLog) {
         questLogLoaded = parseQuestLog(content, questLog);
+    }
+
+    if (world) {
+        world->mapName.clear();
+        world->hasBag = false;
+        std::istringstream lines(content);
+        std::string line;
+        bool inWorld = false;
+        while (std::getline(lines, line)) {
+            line = trim(line);
+            if (line == "[BAG]") {
+                world->hasBag = true;
+            }
+            if (line == "[WORLD]") {
+                inWorld = true;
+            } else if (!line.empty() && line[0] == '[') {
+                inWorld = false;
+            } else if (inWorld && line.rfind("map=", 0) == 0) {
+                world->mapName = line.substr(4);
+            }
+        }
     }
 
     return partyLoaded || questLogLoaded;
@@ -106,6 +177,19 @@ void SaveSystem::serializeParty(std::string& output, Party* party) {
         output += "member_" + std::to_string(i) + "_gold=" + std::to_string(member->getGold()) + "\n";
         output += "member_" + std::to_string(i) + "_x=" + std::to_string(member->getX()) + "\n";
         output += "member_" + std::to_string(i) + "_y=" + std::to_string(member->getY()) + "\n";
+        // Gear is stored by catalog ID; an empty value means the slot is bare.
+        output += "member_" + std::to_string(i) + "_weapon=" +
+                  (member->getEquippedWeapon() ? member->getEquippedWeapon()->getId() : "") + "\n";
+        output += "member_" + std::to_string(i) + "_armor=" +
+                  (member->getEquippedArmor() ? member->getEquippedArmor()->getId() : "") + "\n";
+    }
+
+    const auto& stacks = party->getBag().getStacks();
+    output += "[BAG]\n";
+    output += "stack_count=" + std::to_string(stacks.size()) + "\n";
+    for (std::size_t i = 0; i < stacks.size(); ++i) {
+        output += "stack_" + std::to_string(i) + "_id=" + stacks[i].id + "\n";
+        output += "stack_" + std::to_string(i) + "_count=" + std::to_string(stacks[i].count) + "\n";
     }
 }
 
@@ -254,10 +338,65 @@ bool SaveSystem::parseParty(const std::string& input, Party* party) {
             player->addGold(savedGold);
         }
 
+        // An ID the catalog no longer knows leaves the slot bare rather than
+        // failing the whole load.
+        if (auto weapon = ItemCatalog::create(getStr("weapon"))) {
+            player->equipWeapon(std::move(weapon));
+        }
+        if (auto armor = ItemCatalog::create(getStr("armor"))) {
+            player->equipArmor(std::move(armor));
+        }
+
         party->addMember(std::move(player));
     }
 
+    parseBag(input, party);
     return true;
+}
+
+void SaveSystem::parseBag(const std::string& input, Party* party) {
+    std::istringstream stream(input);
+    std::string line;
+    bool inBag = false;
+    std::unordered_map<std::string, std::string> values;
+
+    while (std::getline(stream, line)) {
+        line = trim(line);
+        if (line == "[BAG]") {
+            inBag = true;
+            continue;
+        }
+        if (!line.empty() && line[0] == '[') {
+            inBag = false;
+            continue;
+        }
+        if (!inBag) continue;
+        const size_t eq = line.find('=');
+        if (eq == std::string::npos) continue;
+        values[line.substr(0, eq)] = line.substr(eq + 1);
+    }
+
+    auto toInt = [&values](const std::string& key) -> int {
+        auto it = values.find(key);
+        if (it == values.end()) return 0;
+        try {
+            return std::stoi(it->second);
+        } catch (const std::exception&) {
+            return 0;
+        }
+    };
+
+    party->getBag().clear();
+    const int stackCount = toInt("stack_count");
+    for (int i = 0; i < stackCount; ++i) {
+        const std::string prefix = "stack_" + std::to_string(i) + "_";
+        auto idIt = values.find(prefix + "id");
+        if (idIt == values.end()) continue;
+        // Unknown IDs and bad counts are skipped: add() refuses both.
+        if (!party->getBag().add(idIt->second, toInt(prefix + "count"))) {
+            std::cerr << "Save has an unusable bag entry '" << idIt->second << "' — skipped." << std::endl;
+        }
+    }
 }
 
 bool SaveSystem::parseQuestLog(const std::string& input, QuestLog* questLog) {

@@ -46,9 +46,9 @@ constants in the matching `make*()` function in `TileTextureGen.cpp`. To add a
 type: enum case in `Tile.h`, a `make*()` function, and an entry in `kTileTypes`
 in `Map.cpp`. See ASSET_SPEC.md section 4.
 
-### Stale files — safe to delete
-`assets/textures/tiles/*.png` (9 fantasy JPEGs mislabelled as .png) are no longer
-loaded by anything. They are dead weight in the repo.
+### Stale files — removed
+The 9 fantasy tile images under `assets/textures/tiles/` were deleted on 2026-11-10
+along with the other unreferenced fantasy-era files. They remain in git history.
 
 ### Tile types deferred, not cut
 The 17 speculative types previously listed here (sidewalk, crosswalk, subway_platform,
@@ -108,7 +108,7 @@ namespace, or accept that a party of three shows repeated art.
 | enemy_netrunner.png | [MISSING] | Hacker enemy — Neon Alley. **Renamed:** plain `netrunner.png` collides with the player class sprite. Keep enemies namespaced. |
 | combat_cyborg.png | [MISSING] | Heavy enemy — Neon Alley, Corporate Plaza |
 | corporate_enforcer.png | [MISSING] | Elite enemy — Corporate Plaza |
-| goblin.png | [TEMP] | Fantasy-era leftover, unused in cyberpunk → [CUT] |
+| goblin.png | [CUT] | Fantasy-era leftover, deleted 2026-11-10 |
 
 ### Additional enemies for full game
 | Asset | Status | Notes |
@@ -196,10 +196,10 @@ namespace, or accept that a party of three shows repeated art.
 | Asset | Status | Notes |
 |-------|--------|-------|
 | menu_background.png | [TEMP] | Main menu background |
-| start.png | [TEMP] | Start button |
-| loadgame.png | [TEMP] | Load game button |
-| settings.png | [TEMP] | Settings button |
-| quit.png | [TEMP] | Quit button |
+| start.png | [CUT] | Start button. Menu buttons are text `UIButton` widgets now; file deleted 2026-11-10 |
+| loadgame.png | [CUT] | Load game button. Menu buttons are text `UIButton` widgets now; file deleted 2026-11-10 |
+| settings.png | [CUT] | Settings button. Menu buttons are text `UIButton` widgets now; file deleted 2026-11-10 |
+| quit.png | [CUT] | Quit button. Menu buttons are text `UIButton` widgets now; file deleted 2026-11-10 |
 | cursor.png | [TEMP] | Menu cursor |
 | namebanner.png | [TEMP] | Game title banner |
 

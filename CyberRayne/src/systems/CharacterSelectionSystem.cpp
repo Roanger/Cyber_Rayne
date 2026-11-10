@@ -165,7 +165,7 @@ void CharacterSelectionSystem::render() {
         std::cout << "Choose your character:" << std::endl;
         for (size_t i = 0; i < m_characterOptions.size(); ++i) {
             const auto& option = m_characterOptions[i];
-            std::cout << (i == m_selectedIndex ? "> " : "  ") 
+            std::cout << (static_cast<int>(i) == m_selectedIndex ? "> " : "  ") 
                       << i << ". " << option.name << std::endl;
         }
         std::cout << "Use arrow keys to select, Enter to confirm" << std::endl;

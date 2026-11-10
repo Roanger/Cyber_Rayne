@@ -158,5 +158,7 @@ void MenuSystem::handleInput(InputAction action) {
                 m_menuButtons[m_highlightedIndex]->handleInput(InputAction::CONFIRM);
             }
             break;
+        default:
+            break;
     }
 }

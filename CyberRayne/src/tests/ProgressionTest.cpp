@@ -79,10 +79,6 @@ int main() {
     expect(enemyExp > 0, "enemy should have positive XP reward");
     expect(enemyGold >= 0, "enemy should have non-negative gold reward");
 
-    // Record party XP/gold before battle.
-    int expBefore = party->getLeader()->getExperience();
-    int goldBefore = party->getLeader()->getGold();
-
     battle.startBattle(enemies);
 
     // Advance time until a player turn.

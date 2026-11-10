@@ -9,6 +9,13 @@ project(CyberRayne)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Warnings on for all of our own targets. stb_image is silenced at its include site.
+if(MSVC)
+    add_compile_options(/W4)
+else()
+    add_compile_options(-Wall -Wextra)
+endif()
+
 if(WIN32)
     # Set Vulkan SDK path
     if(DEFINED ENV{VULKAN_SDK})
@@ -53,6 +60,7 @@ add_executable(CyberRayne
     src/entities/Quest.cpp
     src/entities/QuestLog.cpp
     src/entities/Equipment.cpp
+    src/entities/Inventory.cpp
     src/core/Map.cpp
     src/core/Tile.cpp
     src/core/World.cpp
@@ -63,7 +71,12 @@ add_executable(CyberRayne
     src/systems/SaveSystem.cpp
     src/systems/EncounterTable.cpp
     src/systems/ContentFactory.cpp
+    src/systems/StoryDirector.cpp
     src/systems/AudioManager.cpp
+    src/ui/StoryHud.cpp
+    src/ui/PauseMenu.cpp
+    src/ui/SettingsMenu.cpp
+    src/ui/Theme.cpp
     src/systems/InputConfig.cpp
     src/graphics/VulkanRenderer.cpp
     src/graphics/TileTextureGen.cpp
@@ -82,6 +95,7 @@ add_executable(CyberRayne
 include(CTest)
 
 set(GAMEPLAY_TEST_SUPPORT_SOURCES
+    src/entities/Inventory.cpp
     src/entities/Player.cpp
     src/entities/Enemy.cpp
     src/entities/Item.cpp
@@ -155,6 +169,7 @@ add_executable(ContentTest
     src/core/World.cpp
     src/systems/EncounterTable.cpp
     src/systems/ContentFactory.cpp
+    src/systems/StoryDirector.cpp
     src/systems/DialogueSystem.cpp
     src/entities/EnemyTypes.cpp
     src/entities/Quest.cpp
@@ -184,6 +199,7 @@ add_executable(EncounterTest
     src/core/World.cpp
     src/systems/EncounterTable.cpp
     src/systems/ContentFactory.cpp
+    src/systems/StoryDirector.cpp
     src/systems/DialogueSystem.cpp
     src/entities/EnemyTypes.cpp
     src/entities/Quest.cpp
@@ -191,7 +207,54 @@ add_executable(EncounterTest
     ${GAMEPLAY_TEST_SUPPORT_SOURCES}
 )
 
-foreach(test_target CharacterSelectionTest BattleSystemTest EnemyTypesTest BitmapFontTest DialogueSystemTest QuestTest ProgressionTest SaveLoadTest ContentTest Phase5Test EncounterTest StatusEffectTest AbilityTest)
+add_executable(StoryTest
+    src/tests/StoryTest.cpp
+    src/core/World.cpp
+    src/systems/EncounterTable.cpp
+    src/systems/ContentFactory.cpp
+    src/systems/StoryDirector.cpp
+    src/systems/DialogueSystem.cpp
+    src/entities/EnemyTypes.cpp
+    src/entities/Quest.cpp
+    src/entities/QuestLog.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
+add_executable(InventoryTest
+    src/tests/InventoryTest.cpp
+    src/systems/BattleSystem.cpp
+    src/systems/ContentFactory.cpp
+    src/systems/StoryDirector.cpp
+    src/core/World.cpp
+    src/systems/EncounterTable.cpp
+    src/entities/EnemyTypes.cpp
+    src/entities/Quest.cpp
+    src/entities/QuestLog.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
+add_executable(BalanceTest
+    src/tests/BalanceTest.cpp
+    src/systems/BattleSystem.cpp
+    src/systems/ContentFactory.cpp
+    src/systems/StoryDirector.cpp
+    src/core/World.cpp
+    src/systems/EncounterTable.cpp
+    src/entities/EnemyTypes.cpp
+    src/entities/Quest.cpp
+    src/entities/QuestLog.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
+add_executable(MenuTest
+    src/tests/MenuTest.cpp
+    src/ui/PauseMenu.cpp
+    src/ui/SettingsMenu.cpp
+    src/systems/InputConfig.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
+foreach(test_target CharacterSelectionTest BattleSystemTest EnemyTypesTest BitmapFontTest DialogueSystemTest QuestTest ProgressionTest SaveLoadTest ContentTest Phase5Test EncounterTest StatusEffectTest AbilityTest StoryTest MenuTest InventoryTest BalanceTest)
     target_include_directories(${test_target} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party

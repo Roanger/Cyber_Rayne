@@ -1,44 +1,67 @@
-# Cyber_Rayne
+# Cyber Rayne
 
-A 2D Cyberpunk JRPG built from scratch using C++ and Vulkan.
+A turn-based cyberpunk JRPG in the spirit of Final Fantasy IX, built on a custom
+C++20 / Vulkan engine.
 
-## 🎮 Overview
+The current goal is a vertical slice: menu → exploration across three districts of
+Neo-Kyoto → ATB party combat → a three-quest story chain. The roadmap and current
+phase live in [AGENTS.md](AGENTS.md).
 
-Cyber_Rayne is a role-playing game set in a futuristic cyber world. It features a custom game engine built with modern C++ and utilizes Vulkan for high-performance 2D rendering.
+## What works today
 
-## ✨ Features
+- Exploration across three districts with map transitions
+- Visible-enemy and random encounters
+- ATB combat with a three-member party, class ability kits, items, and status effects
+- Three classes for Rayne: Netrunner, Solo, Infiltrator
+- NPC dialogue with choices, and a three-quest story with fixed fights and an ending
+- A shared party bag with healing items and equipment, usable in battle and from the pause menu
+- Save anywhere from the pause menu; saves live in `~/.local/share/CyberRayne/`
+- Rebindable keys (Settings), stored in `~/.config/CyberRayne/input.cfg`
+- Procedurally generated pixel-art tiles
 
-- **Custom Engine**: Built on top of Vulkan for robust graphics performance.
-- **Turn-Based Combat**: Strategic battle system with spells, items, and enemy AI.
-- **Character System**: Class-based character selection (Solo, Netrunner, Infiltrator) with unique stats and ability kits.
-- **Entity Management**: Comprehensive system for NPCs, Enemies, and interactive items.
-- **UI System**: Custom UI manager for menus, battle interfaces, and dialogue.
+Still to come: battle sprites and effects, audio, and final art.
 
-## 🛠️ Tech Stack
+## Building (Linux)
 
-- **Language**: C++17/20
-- **Graphics API**: Vulkan
-- **Build System**: CMake
-- **IDE**: Visual Studio 2022
+Requires CMake, Ninja, a C++20 compiler, the Vulkan headers and loader, GLFW, and
+`glslang`. On Arch: `cmake ninja vulkan-headers vulkan-icd-loader glfw glslang`.
 
-## 🚀 Getting Started
+```bash
+cmake -S CyberRayne --preset linux-debug
+cmake --build CyberRayne/out/build/linux-debug
+ctest --test-dir CyberRayne/out/build/linux-debug --output-on-failure
+```
 
-### Prerequisites
-- Visual Studio 2022 (with C++ Desktop Development workload)
-- Vulkan SDK
-- CMake
+Run it from the build directory so it finds its assets and shaders:
 
-### Building
-1. Clone the repository:
-   `git clone https://github.com/Roanger/Cyber_Rayne.git`
-2. Open the folder in Visual Studio.
-3. Let CMake configure the project.
-4. Build and Run.
+```bash
+cd CyberRayne/out/build/linux-debug
+./CyberRayne
+```
 
-## 📂 Project Structure
+`CYBERRAYNE_START=world ./CyberRayne` skips the menus and drops straight into
+exploration. `CYBERRAYNE_START=load` resumes the saved game.
 
-- `src/core`: Core game loop and state management.
-- `src/graphics`: Vulkan renderer implementation.
-- `src/entities`: Game objects (Player, Enemy, etc.).
-- `src/systems`: Game logic systems (Battle, UI).
-- `assets`: Game assets (textures, data files).
+Windows presets (`x64-debug`, `x64-release`) exist in `CMakePresets.json` and need the
+Vulkan SDK.
+
+## Controls
+
+Defaults; all can be changed under Settings.
+
+| Key | Action |
+|---|---|
+| Arrow keys | Move / navigate menus |
+| Enter | Confirm / talk to a nearby NPC |
+| Esc | Cancel |
+| M or P | Pause menu (party, items, equipment, quests, save, settings) |
+
+## Layout
+
+- `CyberRayne/src`, `CyberRayne/include` — engine and game code
+  (`core`, `entities`, `systems`, `graphics`, `ui`, `tests`)
+- `CyberRayne/shaders` — GLSL sources, compiled to SPIR-V at build time
+- `CyberRayne/assets` — sprites, UI, fonts
+- `CyberRayne/tools` — asset pipeline (`spriteprep.py`, `validate_assets.py`)
+- [ASSET_SPEC.md](ASSET_SPEC.md) — what assets must look like
+- [ASSET_LIST.md](ASSET_LIST.md) — which assets exist and their status

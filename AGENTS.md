@@ -101,8 +101,6 @@ Cyber Rayne is a turn-based JRPG (Final Fantasy 9 reimagined in a cyberpunk sett
 - Added `Phase5Test` to CTest verifying AudioManager and InputConfig functionality.
 - All 10 tests pass on linux-debug build.
 
-## Current Phase
-
 ### Phase 6: Cyberpunk Classes, Abilities, and Reachable Combat — COMPLETE
 
 **Class rename.** `CharacterClass` is now `NETRUNNER` / `SOLO` / `INFILTRATOR`, replacing
@@ -163,11 +161,193 @@ between battles; per-frame renderer diagnostics spammed ~30k lines per run.
 
 13 CTest suites pass, including new `AbilityTest`, `StatusEffectTest`, and `EncounterTest`.
 
-### Next Up
+## Roadmap to Vertical Slice Lock (planned 2026-11-10)
 
-- Replace placeholder entity markers (coloured squares) with real enemy and NPC sprites.
-- MP bars and status-effect indicators in the battle HUD.
-- Wire quest objectives to combat — "Defeat the street thugs" has no code that completes it.
+An audit on 2026-11-10 found that phases 0-6 built and tested the systems, but several
+are not connected to the running game: NPCs cannot be talked to (no interact input, no
+`DialogueSystem` in `GameState`), nothing starts or advances a quest, `saveGame()` is
+never called, audio is a stub, and the pause / game-over / victory screens are blank.
+Phases 7-13 close those gaps.
+
+**Scope decisions (user, 2026-11-10):**
+- The slice is the existing three-quest chain only ("The Data Chip" → "Corporate
+  Intrusion" → "The Truth"). Further story and world progression is deferred.
+- Saving is allowed at any time from the pause menu (no save points).
+- Art is generated externally, then conformed with `tools/spriteprep.py` and gated by
+  `tools/validate_assets.py`. `spriteprep.py` does not create art; it only conforms it.
+- Every character sprite on disk is a placeholder. All characters get new sprites,
+  including Cyph and Vash, who get their own files rather than sharing class sprites.
+
+### Phase 7: Cleanup and Safety Net — COMPLETE (2026-11-10)
+
+- Removed dead tracked files: `VulkanRenderer_temp*.cpp`, three stale `.bat` scripts, the
+  duplicate `tests/EnemyTypesTest.cpp`, the outdated inner README, and every asset no code
+  references (fantasy tiles, `.txt` stubs, unused menu button images). Seven asset files
+  remain, all still placeholder.
+- Rewrote the root README for the Linux/CMake-preset workflow.
+- `-Wall -Wextra` (`/W4` on MSVC) is on for all targets; the 39 warnings it raised are
+  fixed. **Keep the build at zero warnings.**
+- `VulkanRenderer::pickPhysicalDevice` ranks discrete > integrated > virtual > CPU and
+  logs the chosen device name.
+- Added `.github/workflows/ci.yml`: debug and release build + CTest with no secrets, plus
+  the asset validator as a non-blocking job (6 placeholder files still fail it).
+- Not done: Vulkan validation layers are not installed on the dev machine, so debug
+  builds log "Validation layers requested, but not available".
+
+### Phase 8: Story Loop — COMPLETE (2026-11-10)
+
+The three-quest chain is playable start to finish.
+
+- **`StoryDirector`** (`systems/StoryDirector.{h,cpp}`) is the single owner of story logic:
+  what each NPC says at each point, which events start quests and complete objectives,
+  which fixed fights exist, and which maps are locked. It keeps no state of its own beyond
+  a notification queue — everything is derived from the `QuestLog`, so saving the quest log
+  saves the story. `ContentFactory::attachNPCDialogues` now delegates to it.
+- **Talking** uses CONFIRM (Enter) next to an NPC rather than a separate interact action.
+  `GameState` owns a `DialogueSystem` and reports each node to the director; nodes with IDs
+  `NODE_*` carry story effects, and each effect re-checks its precondition.
+- **Fixed fights** (`World::ensureStoryEncounter`): one visible marker enemy (drawn gold)
+  plus escorts that join the battle. `World::getActiveEncounterTag` tells `GameState` which
+  fight was won. Fleeing puts the fight back and steps the party to a retreat tile.
+- **Corporate Plaza is locked** until "The Data Chip" is complete
+  (`World::setMapLocked`); the player is turned back with a message.
+- **`StoryHud`** (`ui/StoryHud`): quest tracker, talk prompt, toasts, dialogue box with
+  word wrap (`ui/TextWrap.h`), and an ending card. Rosé Pine colours.
+- NPCs are solid; quest rewards pay full XP to every member and gold to the leader.
+- `MAX_SPRITES` raised 1000 → 2000: text is one sprite per glyph.
+
+**Bugs fixed along the way:**
+- Map transitions fired mid-step, and the interrupted step kept interpolating on the new
+  map. Walking north out of Central chained through Neon Alley's far exit and landed in
+  Corporate Plaza. Transitions now wait for the step to finish and use
+  `Player::teleport`, which cancels movement. **Use `teleport`, not `setPosition`, to
+  relocate a player who may be mid-step.**
+- `changeMap` spawned enemies before the biome was updated, so each district was populated
+  from the previous district's encounter table.
+
+14 CTest suites pass, including new `StoryTest`, which plays the whole chain headlessly.
+
+**Not yet verified:** fixed-fight difficulty (thugs: 2 Street Thugs + Combat Cyborg at L2;
+Enforcer L4 + 2 Security Drones L3) is a first guess — tune in phase 13.
+
+### Phase 9a: Saving, Pause Menu, Result Screens — COMPLETE (2026-11-10)
+
+Phase 9 was split when the audit for it found that no item or piece of equipment is ever
+given to the player, so item and equipment menus would have had nothing to show. That
+content, plus Settings, is phase 9b.
+
+- **Save anywhere** from the pause menu. Saves live at
+  `$XDG_DATA_HOME/CyberRayne/savegame.txt` (normally `~/.local/share/CyberRayne/`), not the
+  working directory. Format `version=2` adds a `[WORLD]` section with the current map;
+  version-1 saves still load and resume in Neo-Kyoto Central. Writes go to a `.tmp` file
+  and are renamed into place, so a failed write cannot destroy the previous save.
+- **Loading** builds the party and quest log in fresh objects and swaps them in only on
+  success, reloads member textures, and uses `World::travelTo`, which snaps a mid-step
+  position to a tile and falls back to the map's arrival point if the saved tile is not
+  standable.
+- **`PauseMenu`** (`ui/PauseMenu`): Resume, Party, Quests, Save Game, Quit to Title, drawn
+  over the frozen world. Navigation is plain logic, compiled into `MenuTest` without
+  Vulkan; drawing is behind `#ifndef NO_VULKAN`. Quit asks twice.
+- **Victory card** (`State::BATTLE_RESULT`): XP, gold, level-ups. **Game-over card**: Enter
+  loads the last save if there is one, otherwise returns to title.
+- **Recovery, so HP loss cannot soft-lock a run:** members who are down at the end of a won
+  battle get up with 1 HP, and the Street Vendor in Central restores the whole party for
+  20 G (`StoryDirector::NODE_VENDOR_MEAL`).
+- `ui/Theme` holds the shared Rosé Pine colours and panel drawing for all overlays.
+- Dev shortcut: `CYBERRAYNE_START=load ./CyberRayne` resumes the saved game directly.
+  Combine with `XDG_DATA_HOME=<dir>` to test against a scratch save.
+
+15 CTest suites pass (new: `MenuTest`; `SaveLoadTest` and `StoryTest` extended).
+
+### Phase 9b: Items, Equipment, Settings — COMPLETE (2026-11-10)
+
+- **Shared party bag** (user decision: one bag, as in FF9). `Inventory` holds stacks keyed by
+  catalog ID; `Party::getBag()` owns it. `Player`'s per-member inventory is gone.
+- **`ItemCatalog`** (`Inventory.h`) creates every item from a stable string ID. **IDs are
+  what saves store — renaming one orphans it in existing saves.** Seven items: Stim Pack,
+  Trauma Kit, Defib Patch (revive), Shock Baton, Mono-Katana, Street Jacket, Kevlar Weave.
+- `Item::canUseOn` is checked before anything is consumed, in battle and out. Healing items
+  cannot raise the fallen; `ReviveItem` only works on them.
+- **Battle items** come from the bag, are consumed on use (they never were before), and
+  ask for an ally target. `ActionRequest::itemIndex` indexes the bag's *consumable* stacks;
+  for items `targetIndex` indexes every party member, living or not.
+- **Equipment** moves through `Party::equipFromBag` / `unequipToBag`, which swap with the bag
+  so nothing is created or destroyed.
+- New game starts with 3 Stim Packs, a Defib Patch, a Shock Baton and a Street Jacket
+  (`ContentFactory::grantStartingKit`). "The Data Chip" rewards a Mono-Katana and 2 Stim
+  Packs; "Corporate Intrusion" a Kevlar Weave and a Trauma Kit.
+- **Saves** now include a `[BAG]` section and each member's weapon/armor ID. Unknown IDs are
+  skipped rather than failing the load. A save with no `[BAG]` section predates the bag and
+  is given the starting kit on load.
+- **Pause menu** gained Items (use on a member) and Equipment (member → slot → piece) screens.
+- **Settings** (`ui/SettingsMenu`), reachable from the title and the pause menu: rebind any of
+  the eight actions, or reset. Bindings persist to `~/.config/CyberRayne/input.cfg`; a file
+  that fails to parse or leaves an action unbound is ignored in favour of the defaults.
+- **Input now goes through `InputConfig`.** `Game.cpp` used a hardcoded key table and ignored
+  it. While `GameState::wantsRawKey()` is true the next raw key press goes to the rebind
+  instead of being translated to an action. Esc always cancels a rebind.
+
+16 CTest suites pass (new: `InventoryTest`; `MenuTest`, `SaveLoadTest`, `StoryTest` extended).
+
+**Known gap, for phase 10:** in battle, target selection for ally-targeted *abilities* still
+lists enemies (`UIManager::m_targets`). Items use the correct ally list; abilities should
+be moved onto the same path.
+
+### Combat balance (first pass, 2026-11-10; pulled forward from phase 13)
+
+A play session ended in a wipe seconds after entering Neon Alley, so the fights were
+measured instead of guessed. Simulating each fight 200 times per class showed:
+
+- A Neon Alley ambush (Drone L3 + Thug L2 + Cyborg L3) beat a level 1 party 100% of the time.
+- The Enforcer story fight was unwinnable for every class at levels 3 and 4.
+- As a Netrunner, Rayne won the thug story fight 3% of the time at level 1.
+
+Causes: enemies were two to three times faster than most of the party, so they took nearly
+twice as many turns, and enemy defense outgrew party damage. **Combat snowballs** — results
+jump from 0% to 100% across small stat changes — so tune by measurement.
+
+Changes: speed, defense and bulk lowered for the five cyberpunk enemy types
+(`EnemyTypes.cpp`); ambushes are 1-2 enemies, not 1-3; Corporate Plaza table capped at
+level 3-4; thug fight is 2 Street Thugs L2 + Combat Cyborg L3; Enforcer fight is Enforcer L3
++ 2 Security Drones L3; "The Data Chip" pays 350 XP (was 200) so the party is level 3
+before the plaza.
+
+**`BalanceTest`** now simulates both story fights and every possible ambush pair in each
+district, for all three classes, and fails below a 90% win rate. Its simulated player uses
+damage abilities and focus-fires but never heals or uses items, so real odds are better.
+Run `out/build/linux-debug/BalanceTest` to print the win-rate table.
+
+**Open for phase 13:** everything currently measures 98-100%, which is probably too easy.
+The test only sets a floor; there is no ceiling yet, and no measure of how much HP a fight
+costs. Legacy fantasy enemy types were not retuned (unused by any encounter table).
+
+17 CTest suites pass.
+
+## Current Phase
+
+### Phase 10: Battle Presentation — NEXT
+
+- Enemy and party sprites in battle, battle background.
+- MP bars, status-effect indicators, damage numbers, hit flash.
+
+### Phase 11: Slice Art
+
+- Only what the slice needs: Rayne (3 classes), Cyph, Vash, 5 enemy types plus the
+  boss, 4 NPCs, menu UI.
+- Prompt list per sprite → user generates → `spriteprep.py` → validator at zero failures,
+  then make the validator blocking in CI.
+- Fix the hologram tile alpha (reads as a solid cyan floor).
+
+### Phase 12: Audio
+
+- Real backend behind `AudioManager` (miniaudio, single header, like `stb_image`).
+- Settle `.ogg` vs `.wav`; a few music tracks and about 10 sound effects.
+
+### Phase 13: Balance and Lock
+
+- Tuning pass for a 20-30 minute slice.
+- Automated scripted-playthrough test of the full quest chain.
+- Full manual playthrough.
 
 ## Working Rules
 

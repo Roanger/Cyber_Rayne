@@ -219,7 +219,7 @@ int main() {
 
     // --- Enemies have kits and use the same execution path -------------------
     {
-        const auto& droneKit = AbilityRegistry::forEnemy("Security Drone");
+        const std::vector<const Ability*> droneKit = AbilityRegistry::forEnemy("Security Drone");
         expect(!droneKit.empty(), "the security drone should have an ability");
 
         // An unknown enemy name yields an empty kit rather than crashing.

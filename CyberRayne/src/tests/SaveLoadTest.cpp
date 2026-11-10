@@ -7,6 +7,9 @@
 #include <memory>
 #include <stdexcept>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
 
 namespace {
 void expect(bool condition, const char* message) {
@@ -34,6 +37,15 @@ int main() {
     const int savedStrength = party->getLeader()->getStrength();
     const std::size_t savedAbilityCount = party->getLeader()->getAbilities().size();
     party->getLeader()->setHealth(37);
+
+    // Bag and gear. One piece is worn and its twin stays in the bag, to catch
+    // a loader that confuses the two.
+    party->getBag().add("stim_pack", 3);
+    party->getBag().add("shock_baton", 2);
+    party->getBag().add("kevlar_weave", 1);
+    expect(party->equipFromBag(0, "shock_baton"), "the leader should equip the baton");
+    expect(party->equipFromBag(1, "kevlar_weave"), "the second member should equip the armor");
+    const int savedAttack = party->getLeader()->getEffectiveStrength();
 
     auto questLog = std::make_unique<QuestLog>();
     auto quest = std::make_unique<Quest>(1, "Test Quest", "A test quest for serialization");
@@ -85,6 +97,19 @@ int main() {
     expect(leader->getAbilities().size() == savedAbilityCount,
            "loaded leader should know the same abilities");
 
+    // Bag and gear come back exactly.
+    expect(leader->getEquippedWeapon() && leader->getEquippedWeapon()->getId() == "shock_baton",
+           "the leader's weapon should survive the round trip");
+    expect(leader->getEquippedArmor() == nullptr, "an empty slot should stay empty");
+    expect(leader->getEffectiveStrength() == savedAttack, "equipped gear should still count after loading");
+    expect(loadedParty->getMember(1)->getEquippedArmor() &&
+               loadedParty->getMember(1)->getEquippedArmor()->getId() == "kevlar_weave",
+           "the second member's armor should survive the round trip");
+    expect(loadedParty->getBag().count("stim_pack") == 3, "consumable counts should survive the round trip");
+    expect(loadedParty->getBag().count("shock_baton") == 1, "the spare baton should still be in the bag");
+    expect(loadedParty->getBag().count("kevlar_weave") == 0, "worn armor should not also be in the bag");
+    expect(loadedParty->getBag().getStacks().size() == 2, "the bag should hold exactly what was saved");
+
     // Verify quest log.
     expect(loadedQuestLog->getQuests().size() == 1, "loaded quest log should have 1 quest");
     const Quest* loadedQuest = loadedQuestLog->getQuest(1);
@@ -99,6 +124,100 @@ int main() {
 
     // Clean up the save file.
     std::remove(savePath.c_str());
+
+    // --- World state, and saving into a directory that does not exist yet ---
+    {
+        namespace fs = std::filesystem;
+        const fs::path dir = fs::temp_directory_path() / "cyberrayne_savetest" / "nested";
+        fs::remove_all(dir.parent_path());
+        const std::string nestedPath = (dir / "savegame.txt").string();
+
+        SaveWorldState where;
+        where.mapName = "Neon Alley";
+        party->getLeader()->setPosition(15.0f, 8.0f);
+        expect(saveSystem.saveGame(nestedPath, party.get(), questLog.get(), &where),
+               "saving should create missing directories");
+        expect(!fs::exists(nestedPath + ".tmp"), "the temporary file should not be left behind");
+
+        auto party2 = std::make_unique<Party>();
+        auto log2 = std::make_unique<QuestLog>();
+        SaveWorldState loaded;
+        loaded.mapName = "stale";
+        expect(saveSystem.loadGame(nestedPath, party2.get(), log2.get(), &loaded), "load should succeed");
+        expect(loaded.mapName == "Neon Alley", "the current map should survive the round trip");
+        expect(loaded.hasBag, "a current save reports that it has a bag section");
+        expect(party2->getLeader()->getX() == 15.0f && party2->getLeader()->getY() == 8.0f,
+               "the leader's position should survive the round trip");
+
+        // Overwriting an existing save works and leaves a complete file.
+        where.mapName = "Corporate Plaza";
+        expect(saveSystem.saveGame(nestedPath, party.get(), questLog.get(), &where), "re-saving should succeed");
+        auto party3 = std::make_unique<Party>();
+        auto log3 = std::make_unique<QuestLog>();
+        expect(saveSystem.loadGame(nestedPath, party3.get(), log3.get(), &loaded) &&
+                   loaded.mapName == "Corporate Plaza",
+               "the newer save should replace the older one");
+
+        // A save without world state loads, and reports no map.
+        expect(saveSystem.saveGame(nestedPath, party.get(), questLog.get()), "saving without world state works");
+        auto party4 = std::make_unique<Party>();
+        auto log4 = std::make_unique<QuestLog>();
+        loaded.mapName = "stale";
+        expect(saveSystem.loadGame(nestedPath, party4.get(), log4.get(), &loaded) && loaded.mapName.empty(),
+               "a save with no map should report an empty map name");
+
+        // A save naming an item the catalog does not know still loads; the
+        // unknown entries are dropped.
+        {
+            std::ifstream in(nestedPath);
+            std::stringstream buffer;
+            buffer << in.rdbuf();
+            std::string text = buffer.str();
+            const std::string from = "stack_0_id=stim_pack";
+            const auto at = text.find(from);
+            expect(at != std::string::npos, "the save should list the stim packs first");
+            text.replace(at, from.size(), "stack_0_id=removed_item");
+            const std::string weapon = "member_0_weapon=shock_baton";
+            const auto wat = text.find(weapon);
+            expect(wat != std::string::npos, "the save should record the leader's weapon");
+            text.replace(wat, weapon.size(), "member_0_weapon=removed_item");
+            std::ofstream out(nestedPath);
+            out << text;
+        }
+        auto party5 = std::make_unique<Party>();
+        auto log5 = std::make_unique<QuestLog>();
+        expect(saveSystem.loadGame(nestedPath, party5.get(), log5.get()), "a save with unknown items still loads");
+        expect(party5->size() == 3, "the party survives unknown items");
+        expect(party5->getLeader()->getEquippedWeapon() == nullptr, "an unknown weapon leaves the slot bare");
+        expect(party5->getBag().count("shock_baton") == 1 && party5->getBag().getStacks().size() == 1,
+               "known bag entries survive next to unknown ones");
+
+        // A save from before the bag existed is told apart from an empty bag.
+        {
+            std::ifstream in(nestedPath);
+            std::stringstream buffer;
+            buffer << in.rdbuf();
+            std::string text = buffer.str();
+            const auto bagAt = text.find("[BAG]");
+            const auto questAt = text.find("[QUESTLOG]");
+            expect(bagAt != std::string::npos && questAt != std::string::npos && bagAt < questAt,
+                   "the bag section sits between the party and the quest log");
+            text.erase(bagAt, questAt - bagAt);
+            std::ofstream out(nestedPath);
+            out << text;
+        }
+        auto party6 = std::make_unique<Party>();
+        auto log6 = std::make_unique<QuestLog>();
+        SaveWorldState old;
+        old.hasBag = true;
+        expect(saveSystem.loadGame(nestedPath, party6.get(), log6.get(), &old) && !old.hasBag,
+               "a save with no bag section says so");
+        expect(party6->getBag().isEmpty() && log6->getQuests().size() == 1,
+               "and still loads the party and quests");
+
+        fs::remove_all(dir.parent_path());
+        expect(!SaveSystem::defaultSavePath().empty(), "there is always a default save path");
+    }
 
     // Test loading non-existent file.
     auto emptyParty = std::make_unique<Party>();

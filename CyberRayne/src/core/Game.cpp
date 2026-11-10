@@ -2,6 +2,7 @@
 #include "../../include/GameState.h"
 #include "../../include/VulkanRenderer.h"
 #include "../../include/InputAction.h"
+#include "../../include/InputConfig.h"
 #include <array>
 #include <iostream>
 #ifdef _WIN32
@@ -75,41 +76,47 @@ void Game::run() {
 
         // Handle input
         if (m_gameState) {
-            static std::array<bool, 8> previousKeyStates{};
-            const std::array<InputAction, 8> actions = {
-                InputAction::MOVE_UP,
-                InputAction::MOVE_DOWN,
-                InputAction::CONFIRM,
-                InputAction::MOVE_LEFT,
-                InputAction::MOVE_RIGHT,
-                InputAction::CANCEL,
-                InputAction::OPEN_MENU,
-                InputAction::PAUSE
-            };
+            // Raw key codes are GLFW's on Linux and virtual-key codes on
+            // Windows, matching what InputConfig stores.
 #ifdef _WIN32
-            const std::array<int, 8> keys = {VK_UP, VK_DOWN, VK_RETURN, VK_LEFT, VK_RIGHT, VK_ESCAPE, 'M', 'P'};
+            constexpr int kFirstKey = 8;
+            constexpr int kLastKey = 255;
             auto isPressed = [](int key) { return (GetAsyncKeyState(key) & 0x8000) != 0; };
 #else
+            constexpr int kFirstKey = GLFW_KEY_SPACE;
+            constexpr int kLastKey = GLFW_KEY_LAST;
             GLFWwindow* window = m_renderer ? m_renderer->getWindow() : nullptr;
-            const std::array<int, 8> keys = {
-                GLFW_KEY_UP,
-                GLFW_KEY_DOWN,
-                GLFW_KEY_ENTER,
-                GLFW_KEY_LEFT,
-                GLFW_KEY_RIGHT,
-                GLFW_KEY_ESCAPE,
-                GLFW_KEY_M,
-                GLFW_KEY_P
-            };
             auto isPressed = [window](int key) { return window && glfwGetKey(window, key) == GLFW_PRESS; };
 #endif
-            for (size_t i = 0; i < actions.size(); ++i) {
-                const bool pressed = isPressed(keys[i]);
-                if (pressed && !previousKeyStates[i]) {
-                    m_gameState->handleInput(actions[i]);
-                }
-                previousKeyStates[i] = pressed;
+            static std::array<bool, kLastKey + 1> previous{};
+            std::array<bool, kLastKey + 1> current{};
+            for (int key = kFirstKey; key <= kLastKey; ++key) {
+                current[static_cast<std::size_t>(key)] = isPressed(key);
             }
+            auto justPressed = [&](int key) {
+                return key >= kFirstKey && key <= kLastKey && current[static_cast<std::size_t>(key)] &&
+                       !previous[static_cast<std::size_t>(key)];
+            };
+
+            if (m_gameState->wantsRawKey()) {
+                // Rebinding: the next key pressed is the binding itself, not
+                // whatever action it currently means.
+                for (int key = kFirstKey; key <= kLastKey; ++key) {
+                    if (justPressed(key)) {
+                        m_gameState->handleRawKey(key);
+                        break;
+                    }
+                }
+            } else if (const InputConfig* config = m_gameState->getInputConfig()) {
+                // Copy first: handling an action can change the bindings.
+                const auto bindings = config->getBindings();
+                for (const auto& binding : bindings) {
+                    if (justPressed(binding.first)) {
+                        m_gameState->handleInput(binding.second);
+                    }
+                }
+            }
+            previous = current;
         }
 
         // Update game state

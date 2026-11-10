@@ -57,6 +57,9 @@ public:
     // available abilities depend on who is acting.
     void setCurrentActor(Combatant* actor);
 
+    // The party whose bag the Item menu lists. Set when a battle starts.
+    void setParty(Party* party) { m_party = party; m_menuDirty = true; }
+
     // Number of entries in the list currently on screen. Exposed so the
     // navigation logic can be exercised without a renderer.
     int getMenuEntryCount() const;
@@ -110,6 +113,7 @@ private:
 
     // Currently acting combatant (whose menu is shown)
     Combatant* m_currentActor;
+    Party* m_party = nullptr;
     // Living enemies, refreshed each render, used for target selection.
     std::vector<Combatant*> m_targets;
 
