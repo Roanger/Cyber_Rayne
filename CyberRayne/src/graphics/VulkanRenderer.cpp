@@ -539,7 +539,68 @@ void VulkanRenderer::render() {
     drawFrame();
 }
 
+bool VulkanRenderer::recreateSwapChain() {
+    vkDeviceWaitIdle(m_device);
+
+    for (VkFramebuffer framebuffer : m_framebuffers) {
+        if (framebuffer != VK_NULL_HANDLE) vkDestroyFramebuffer(m_device, framebuffer, nullptr);
+    }
+    m_framebuffers.clear();
+    for (VkImageView view : m_swapChainImageViews) {
+        if (view != VK_NULL_HANDLE) vkDestroyImageView(m_device, view, nullptr);
+    }
+    m_swapChainImageViews.clear();
+    if (m_swapChain != VK_NULL_HANDLE) {
+        vkDestroySwapchainKHR(m_device, m_swapChain, nullptr);
+        m_swapChain = VK_NULL_HANDLE;
+    }
+    m_imagesInFlight.clear();
+
+    if (!createSwapChain() || !createImageViews() || !createFramebuffers()) {
+        std::cerr << "Failed to rebuild the swap chain after a window size change." << std::endl;
+        return false;
+    }
+
+    // One pair of semaphores per swapchain image; the new chain may have more.
+    VkSemaphoreCreateInfo semaphoreInfo{};
+    semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+    while (m_renderFinishedSemaphoresPerImage.size() < m_swapChainImages.size()) {
+        VkSemaphore available = VK_NULL_HANDLE;
+        VkSemaphore finished = VK_NULL_HANDLE;
+        if (vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &available) != VK_SUCCESS ||
+            vkCreateSemaphore(m_device, &semaphoreInfo, nullptr, &finished) != VK_SUCCESS) {
+            std::cerr << "Failed to create semaphores for the resized swap chain." << std::endl;
+            return false;
+        }
+        m_imageAvailableSemaphoresPerImage.push_back(available);
+        m_renderFinishedSemaphoresPerImage.push_back(finished);
+    }
+
+    std::cout << "Window is now " << m_swapChainExtent.width << "x" << m_swapChainExtent.height << std::endl;
+    return true;
+}
+
 bool VulkanRenderer::drawFrame() {
+#ifndef _WIN32
+    // Follow the window when its size changes. Wayland never reports an
+    // out-of-date swap chain, so compare sizes ourselves.
+    if (m_window) {
+        int fbWidth = 0;
+        int fbHeight = 0;
+        glfwGetFramebufferSize(m_window, &fbWidth, &fbHeight);
+        if (fbWidth <= 0 || fbHeight <= 0) {
+            return true;  // minimised: nothing to draw on
+        }
+        if (static_cast<uint32_t>(fbWidth) != m_swapChainExtent.width ||
+            static_cast<uint32_t>(fbHeight) != m_swapChainExtent.height) {
+            // This frame's sprites were laid out for the old size; drop them
+            // and draw at the new size from the next frame.
+            m_spritesToRender = 0;
+            return recreateSwapChain();
+        }
+    }
+#endif
+
     vkWaitForFences(m_device, 1, &m_inFlightFences[m_currentFrame], VK_TRUE, UINT64_MAX);
 
     uint32_t imageIndex;
@@ -631,7 +692,7 @@ bool VulkanRenderer::createWindow() {
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
 
     m_window = glfwCreateWindow(
         static_cast<int>(m_windowWidth),
@@ -2236,6 +2297,20 @@ VkExtent2D VulkanRenderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capa
         return capabilities.currentExtent;
     } else {
         VkExtent2D actualExtent = { m_windowWidth, m_windowHeight };
+#ifndef _WIN32
+        // On Wayland the surface has no size of its own, and a tiling
+        // compositor gives the window whatever size it likes. Ask the window
+        // how big it really is; drawing at the requested size instead gets
+        // the picture squashed to fit.
+        if (m_window) {
+            int fbWidth = 0;
+            int fbHeight = 0;
+            glfwGetFramebufferSize(m_window, &fbWidth, &fbHeight);
+            if (fbWidth > 0 && fbHeight > 0) {
+                actualExtent = { static_cast<uint32_t>(fbWidth), static_cast<uint32_t>(fbHeight) };
+            }
+        }
+#endif
 
         actualExtent.width = std::max<uint32_t>(capabilities.minImageExtent.width, std::min<uint32_t>(capabilities.maxImageExtent.width, actualExtent.width));
         actualExtent.height = std::max<uint32_t>(capabilities.minImageExtent.height, std::min<uint32_t>(capabilities.maxImageExtent.height, actualExtent.height));

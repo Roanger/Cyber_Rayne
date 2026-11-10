@@ -3,6 +3,12 @@
 #include "../../include/VulkanRenderer.h"
 #include "../../include/InputAction.h"
 #include "../../include/InputConfig.h"
+#include "../../include/InputState.h"
+#include <cmath>
+#include <filesystem>
+#include <fstream>
+#include <sstream>
+#include <vector>
 #include <array>
 #include <iostream>
 #ifdef _WIN32
@@ -12,6 +18,87 @@
 #endif
 #include <thread>
 #include <chrono>
+
+namespace {
+
+// Adds whatever is held on any connected controller to the table.
+//
+// GLFW describes every pad it recognises in Xbox terms, so one mapping covers
+// PlayStation (Cross = A, Circle = B, Triangle = Y, Options = Start), Xbox,
+// and anything Steam Input presents as an Xbox pad.
+void pollGamepads([[maybe_unused]] InputState::Held& held) {
+#ifndef _WIN32
+    // How far the stick must be pushed to count as a direction.
+    constexpr float STICK_THRESHOLD = 0.5f;
+    auto hold = [&](InputAction action) { held[InputState::indexOf(action)] = true; };
+
+    for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
+        GLFWgamepadstate pad;
+        if (!glfwJoystickIsGamepad(jid) || !glfwGetGamepadState(jid, &pad)) {
+            continue;
+        }
+        const float x = pad.axes[GLFW_GAMEPAD_AXIS_LEFT_X];
+        const float y = pad.axes[GLFW_GAMEPAD_AXIS_LEFT_Y];
+        // The stick picks one direction: whichever way it leans most. That
+        // stops a slightly diagonal push from flickering between two.
+        if (std::fabs(x) >= STICK_THRESHOLD || std::fabs(y) >= STICK_THRESHOLD) {
+            if (std::fabs(x) > std::fabs(y)) {
+                hold(x < 0.0f ? InputAction::MOVE_LEFT : InputAction::MOVE_RIGHT);
+            } else {
+                hold(y < 0.0f ? InputAction::MOVE_UP : InputAction::MOVE_DOWN);
+            }
+        }
+        if (pad.buttons[GLFW_GAMEPAD_BUTTON_DPAD_UP]) hold(InputAction::MOVE_UP);
+        if (pad.buttons[GLFW_GAMEPAD_BUTTON_DPAD_DOWN]) hold(InputAction::MOVE_DOWN);
+        if (pad.buttons[GLFW_GAMEPAD_BUTTON_DPAD_LEFT]) hold(InputAction::MOVE_LEFT);
+        if (pad.buttons[GLFW_GAMEPAD_BUTTON_DPAD_RIGHT]) hold(InputAction::MOVE_RIGHT);
+        if (pad.buttons[GLFW_GAMEPAD_BUTTON_A]) hold(InputAction::CONFIRM);
+        if (pad.buttons[GLFW_GAMEPAD_BUTTON_B]) hold(InputAction::CANCEL);
+        if (pad.buttons[GLFW_GAMEPAD_BUTTON_Y] || pad.buttons[GLFW_GAMEPAD_BUTTON_START]) {
+            hold(InputAction::OPEN_MENU);
+        }
+    }
+#endif
+}
+
+// GLFW ships button layouts for common pads. An unusual one can be taught to
+// it by dropping a gamecontrollerdb.txt (the SDL community file) next to the
+// key bindings; this loads it if present.
+void loadExtraGamepadMappings() {
+#ifndef _WIN32
+    const std::filesystem::path path =
+        std::filesystem::path(InputConfig::defaultConfigPath()).parent_path() / "gamecontrollerdb.txt";
+    std::ifstream file(path);
+    if (!file) {
+        return;
+    }
+    std::stringstream contents;
+    contents << file.rdbuf();
+    if (glfwUpdateGamepadMappings(contents.str().c_str())) {
+        std::cout << "Loaded controller mappings from " << path.string() << std::endl;
+    } else {
+        std::cerr << "Could not read controller mappings in " << path.string() << std::endl;
+    }
+#endif
+}
+
+// Says which controllers are plugged in, once, so a pad that does nothing can
+// be told apart from one the game never saw.
+void logGamepads() {
+#ifndef _WIN32
+    for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
+        if (!glfwJoystickPresent(jid)) continue;
+        if (glfwJoystickIsGamepad(jid)) {
+            std::cout << "Controller " << jid << ": " << glfwGetGamepadName(jid) << std::endl;
+        } else {
+            std::cout << "Controller " << jid << " (" << glfwGetJoystickName(jid)
+                      << ") has no known button layout and is ignored." << std::endl;
+        }
+    }
+#endif
+}
+
+}  // namespace
 
 Game::Game() : m_gameState(nullptr), m_renderer(nullptr), m_running(false),
                m_benchmarkMode(false), m_maxBenchmarkFrames(500), m_benchmarkFrameCount(0) {}
@@ -68,6 +155,21 @@ void Game::run() {
     auto lastTime = std::chrono::high_resolution_clock::now();
     
     std::cout << "Entering game loop..." << std::endl;
+
+    loadExtraGamepadMappings();
+    logGamepads();
+#ifndef _WIN32
+    // Also announce pads plugged in or pulled out while playing.
+    glfwSetJoystickCallback([](int jid, int event) {
+        if (event == GLFW_CONNECTED) {
+            std::cout << "Controller connected: "
+                      << (glfwJoystickIsGamepad(jid) ? glfwGetGamepadName(jid) : glfwGetJoystickName(jid))
+                      << std::endl;
+        } else if (event == GLFW_DISCONNECTED) {
+            std::cout << "Controller " << jid << " disconnected." << std::endl;
+        }
+    });
+#endif
     
     while (m_running && m_renderer->isRunning()) {
         auto currentTime = std::chrono::high_resolution_clock::now();
@@ -98,23 +200,51 @@ void Game::run() {
                        !previous[static_cast<std::size_t>(key)];
             };
 
+            // Which actions are held right now, from the keyboard bindings
+            // and from any controller.
+            InputState::Held held{};
+            if (const InputConfig* config = m_gameState->getInputConfig()) {
+                for (const auto& binding : config->getBindings()) {
+                    const std::size_t action = InputState::indexOf(binding.second);
+                    if (binding.first >= kFirstKey && binding.first <= kLastKey && action < held.size() &&
+                        current[static_cast<std::size_t>(binding.first)]) {
+                        held[action] = true;
+                    }
+                }
+            }
+            pollGamepads(held);
+
+            static InputState inputState;
+            const std::vector<InputAction> fired = inputState.update(deltaTime, held);
+
             if (m_gameState->wantsRawKey()) {
                 // Rebinding: the next key pressed is the binding itself, not
                 // whatever action it currently means.
-                for (int key = kFirstKey; key <= kLastKey; ++key) {
+                m_gameState->setHeldDirection(0, 0);
+                bool handled = false;
+                for (int key = kFirstKey; key <= kLastKey && !handled; ++key) {
                     if (justPressed(key)) {
                         m_gameState->handleRawKey(key);
-                        break;
+                        handled = true;
                     }
                 }
-            } else if (const InputConfig* config = m_gameState->getInputConfig()) {
-                // Copy first: handling an action can change the bindings.
-                const auto bindings = config->getBindings();
-                for (const auto& binding : bindings) {
-                    if (justPressed(binding.first)) {
-                        m_gameState->handleInput(binding.second);
+                // A controller has no Esc: its Cancel button backs out instead.
+                if (!handled && !current[static_cast<std::size_t>(InputConfig::escapeKey())]) {
+                    for (InputAction action : fired) {
+                        if (action == InputAction::CANCEL) {
+                            m_gameState->handleRawKey(InputConfig::escapeKey());
+                            break;
+                        }
                     }
                 }
+            } else {
+                for (InputAction action : fired) {
+                    m_gameState->handleInput(action);
+                }
+                int dx = 0;
+                int dy = 0;
+                inputState.heldDirection(dx, dy);
+                m_gameState->setHeldDirection(dx, dy);
             }
             previous = current;
         }

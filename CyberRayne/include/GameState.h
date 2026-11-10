@@ -52,6 +52,9 @@ public:
     void update(float deltaTime);
     void render(VulkanRenderer* renderer);
     void handleInput(InputAction action);
+    // The direction currently held down (one tile step, or 0,0 for none).
+    // While exploring, the leader keeps walking that way.
+    void setHeldDirection(int dx, int dy) { m_heldDx = dx; m_heldDy = dy; }
 
     // Key rebinding: while this is true, send the next raw key press to
     // handleRawKey instead of translating it to an action.
@@ -135,6 +138,11 @@ private:
     bool m_pendingDevBattle = false;
     // Seconds since start-up; drives idle animation on the map.
     float m_animTime = 0.0f;
+    int m_heldDx = 0;
+    int m_heldDy = 0;
+
+    // Start the leader on a one-tile step, if nothing is in the way.
+    void tryStep(int dx, int dy);
     std::unique_ptr<World> m_world;
     std::unique_ptr<Party> m_party;
     std::unique_ptr<CharacterSelectionSystem> m_charSelectionSystem;

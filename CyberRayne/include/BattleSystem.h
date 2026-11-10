@@ -141,6 +141,8 @@ private:
 
     Combatant* getFirstLivingEnemy() const;
     Combatant* getFirstLivingPlayer() const;
+    // Index into getLivingAllies() of the party member an enemy goes for.
+    int pickEnemyTargetIndex() const;
 
     void checkBattleEnd();
 

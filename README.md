@@ -52,12 +52,16 @@ Vulkan SDK.
 
 Defaults; all can be changed under Settings.
 
-| Key | Action |
-|---|---|
-| Arrow keys | Move / navigate menus |
-| Enter | Confirm / talk to a nearby NPC |
-| Esc | Cancel |
-| M or P | Pause menu (party, items, equipment, quests, save, settings) |
+| Key | Controller | Action |
+|---|---|---|
+| Arrow keys (hold to keep walking) | Left stick or D-pad | Move / navigate menus |
+| Enter | Cross / A | Confirm / talk to a nearby NPC |
+| Esc | Circle / B | Cancel |
+| M or P | Options / Start, or Triangle / Y | Pause menu (party, items, equipment, quests, save, settings) |
+
+Controllers work on Linux through GLFW, which knows PlayStation, Xbox and Steam Input
+pads. Controller buttons are fixed; only keys can be rebound. For a pad GLFW does not
+recognise, put an SDL `gamecontrollerdb.txt` in `~/.config/CyberRayne/`.
 
 ## Layout
 

@@ -369,7 +369,8 @@ void BattleSystem::executeEnemyTurn(Combatant* enemy) {
     const bool useAbility = !usable.empty() && (std::rand() % 100) < ENEMY_ABILITY_CHANCE;
     if (useAbility) {
         const Ability* chosen = usable[std::rand() % usable.size()];
-        auto targets = resolveTargets(enemy, *chosen, -1);
+        // -1 would mean "the first one"; pick someone instead.
+        auto targets = resolveTargets(enemy, *chosen, pickEnemyTargetIndex());
         if (!targets.empty()) {
             chosen->payCost(enemy);
             emitAction(enemy, chosen->getName());
@@ -378,10 +379,20 @@ void BattleSystem::executeEnemyTurn(Combatant* enemy) {
         }
     }
 
-    Combatant* target = getFirstLivingPlayer();
-    if (target) {
-        executeAttack(enemy, target);
+    const auto players = getLivingAllies();
+    if (!players.empty()) {
+        executeAttack(enemy, players[static_cast<std::size_t>(pickEnemyTargetIndex())]);
     }
+}
+
+int BattleSystem::pickEnemyTargetIndex() const {
+    // Enemies spread their attacks across the party at random. They used to
+    // always hit the first living member, which was always Rayne.
+    const auto players = getLivingAllies();
+    if (players.empty()) {
+        return -1;
+    }
+    return std::rand() % static_cast<int>(players.size());
 }
 
 void BattleSystem::executePlayerAction(Combatant* actor, const ActionRequest& request) {

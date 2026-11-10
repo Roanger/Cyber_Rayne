@@ -91,6 +91,8 @@ void Player::update(float deltaTime) {
         m_walkClock = std::max(0.0f, m_walkClock) + deltaTime;
         m_standingFor = 0.0f;
     } else {
+        // Nothing picked up last frame's leftover movement; drop it.
+        m_stepOverflow = 0.0f;
         m_standingFor += deltaTime;
         if (m_standingFor > WALK_GRACE) {
             m_walkClock = -1.0f;
@@ -107,6 +109,8 @@ void Player::update(float deltaTime) {
             m_x = m_targetX;
             m_y = m_targetY;
             m_isMoving = false;
+            // Capped so one very long frame cannot skip most of a tile.
+            m_stepOverflow = std::min(m_moveProgress - 1.0f, 0.5f);
             m_moveProgress = 0.0f;
             m_stepCompleted = true;
         } else {
@@ -260,10 +264,7 @@ void Player::move(float dx, float dy, Map* map) {
     if (m_isMoving) return;
 
     // Turn to face the way that was pressed, even if the way is blocked.
-    if (dx < 0.0f) m_facing = Facing::LEFT;
-    else if (dx > 0.0f) m_facing = Facing::RIGHT;
-    else if (dy < 0.0f) m_facing = Facing::UP;
-    else if (dy > 0.0f) m_facing = Facing::DOWN;
+    face(static_cast<int>(dx), static_cast<int>(dy));
     
     // Calculate target tile position
     int currentTileX = static_cast<int>(m_x);
@@ -279,11 +280,20 @@ void Player::move(float dx, float dy, Map* map) {
         m_targetX = static_cast<float>(targetTileX);
         m_targetY = static_cast<float>(targetTileY);
         m_isMoving = true;
-        m_moveProgress = 0.0f;
-        std::cout << m_name << " moving to (" << m_targetX << ", " << m_targetY << ")" << std::endl;
-    } else {
-        std::cout << m_name << " cannot move there - tile is blocked!" << std::endl;
+        m_moveProgress = m_stepOverflow;
+        m_stepOverflow = 0.0f;
+        // Show the head start now rather than a frame late.
+        m_x = m_startX + (m_targetX - m_startX) * m_moveProgress;
+        m_y = m_startY + (m_targetY - m_startY) * m_moveProgress;
     }
+}
+
+void Player::face(int dx, int dy) {
+    if (m_isMoving) return;
+    if (dx < 0) m_facing = Facing::LEFT;
+    else if (dx > 0) m_facing = Facing::RIGHT;
+    else if (dy < 0) m_facing = Facing::UP;
+    else if (dy > 0) m_facing = Facing::DOWN;
 }
 
 void Player::teleport(float x, float y) {
@@ -296,6 +306,7 @@ void Player::teleport(float x, float y) {
     m_isMoving = false;
     m_moveProgress = 0.0f;
     m_stepCompleted = false;
+    m_stepOverflow = 0.0f;
     m_walkClock = -1.0f;
 }
 

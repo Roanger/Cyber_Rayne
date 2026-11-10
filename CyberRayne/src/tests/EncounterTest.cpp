@@ -94,6 +94,31 @@ int main() {
         }
         expect(seen[0] && seen[1] && seen[2] && seen[3], "a walk shows all four frames");
 
+        // Holding a direction covers ground at the full walking speed: no
+        // pause between tiles, and nothing lost when a step ends mid-frame.
+        {
+            Player runner(Player::CharacterClass::SOLO, "Rayne");
+            runner.teleport(5.0f, 16.0f);
+            const float frame = 1.0f / 60.0f;
+            for (int i = 0; i < 60; ++i) {
+                // Same order as the game: finish the frame's movement, then
+                // start the next step at once if the direction is still held.
+                runner.update(frame);
+                if (!runner.isMoving()) runner.moveRight(&map);
+            }
+            const float travelled = runner.getX() - 5.0f;
+            expect(travelled > 7.6f && travelled < 8.1f, "a second of held walking covers about eight tiles");
+        }
+
+        // Turning on the spot, as when walking into an NPC.
+        {
+            Player turner(Player::CharacterClass::SOLO, "Rayne");
+            turner.teleport(15.0f, 16.0f);
+            turner.face(0, -1);
+            expect(turner.getFacing() == Player::Facing::UP && !turner.isMoving(), "face() turns without stepping");
+            expect(nearlyEqual(turner.getX(), 15.0f) && nearlyEqual(turner.getY(), 16.0f), "and does not move");
+        }
+
         // Let go: the last step finishes, then the character settles.
         for (int i = 0; i < 30; ++i) walker.update(1.0f / 60.0f);
         expect(!walker.isMoving() && walker.getWalkFrame() == Player::STANDING_FRAME,

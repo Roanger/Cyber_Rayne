@@ -256,6 +256,9 @@ private:
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
     VkPresentModeKHR chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes);
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities);
+    // Rebuild the swap chain, its image views and framebuffers at the
+    // window's current size.
+    bool recreateSwapChain();
 
     // Debug messenger helpers
     void setupDebugMessenger();

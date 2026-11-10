@@ -1,5 +1,7 @@
 #include "../../include/AudioManager.h"
 #include "../../include/InputConfig.h"
+#include "../../include/InputState.h"
+#include <vector>
 #include "../../include/InputAction.h"
 #include <iostream>
 #include <stdexcept>
@@ -125,6 +127,54 @@ int main() {
     expect(deserialized, "deserialization should succeed");
     expect(config.getKeyForAction(InputAction::MOVE_UP) != 777, "MOVE_UP should not be 777 after deserialize");
     expect(config.getBindings().size() == 8, "should have 8 bindings after deserialize");
+
+    // --- InputState: presses, repeats and the held direction ---------------
+    {
+        InputState input;
+        InputState::Held held{};
+        const float frame = 1.0f / 60.0f;
+        auto count = [](const std::vector<InputAction>& fired, InputAction action) {
+            int n = 0;
+            for (InputAction a : fired) n += (a == action) ? 1 : 0;
+            return n;
+        };
+        int dx = 9;
+        int dy = 9;
+
+        expect(input.update(frame, held).empty(), "nothing held, nothing fires");
+        expect(!input.heldDirection(dx, dy), "no direction is held at rest");
+
+        held[InputState::indexOf(InputAction::CONFIRM)] = true;
+        expect(count(input.update(frame, held), InputAction::CONFIRM) == 1, "a press fires once");
+        int confirms = 0;
+        for (int i = 0; i < 120; ++i) confirms += count(input.update(frame, held), InputAction::CONFIRM);
+        expect(confirms == 0, "holding Confirm does not confirm again");
+        held.fill(false);
+        input.update(frame, held);
+
+        held[InputState::indexOf(InputAction::MOVE_RIGHT)] = true;
+        expect(count(input.update(frame, held), InputAction::MOVE_RIGHT) == 1, "a direction fires on press");
+        expect(input.heldDirection(dx, dy) && dx == 1 && dy == 0, "and is reported as held");
+        int early = 0;
+        for (int i = 0; i < 18; ++i) early += count(input.update(frame, held), InputAction::MOVE_RIGHT);
+        expect(early == 0, "a held direction waits before repeating");
+        int repeats = 0;
+        for (int i = 0; i < 60; ++i) repeats += count(input.update(frame, held), InputAction::MOVE_RIGHT);
+        expect(repeats >= 6 && repeats <= 10, "then repeats steadily");
+        expect(count(input.update(5.0f, held), InputAction::MOVE_RIGHT) <= 1, "a long frame does not flood repeats");
+
+        // Rolling onto a second direction turns at once; letting it go
+        // returns to the first.
+        held[InputState::indexOf(InputAction::MOVE_UP)] = true;
+        input.update(frame, held);
+        expect(input.heldDirection(dx, dy) && dx == 0 && dy == -1, "the newest direction wins");
+        held[InputState::indexOf(InputAction::MOVE_UP)] = false;
+        input.update(frame, held);
+        expect(input.heldDirection(dx, dy) && dx == 1 && dy == 0, "releasing it falls back to the older one");
+
+        input.reset();
+        expect(!input.heldDirection(dx, dy) && !input.isHeld(InputAction::MOVE_RIGHT), "reset forgets everything");
+    }
 
     std::cout << "Phase5Test passed" << std::endl;
     return 0;

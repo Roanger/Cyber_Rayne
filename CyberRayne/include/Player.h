@@ -86,6 +86,8 @@ public:
     // of a walk sprite sheet.
     enum class Facing { DOWN = 0, LEFT = 1, RIGHT = 2, UP = 3 };
     Facing getFacing() const { return m_facing; }
+    // Turn without stepping. Ignored mid-step.
+    void face(int dx, int dy);
     // Which of the four frames of the walk cycle to show. STANDING_FRAME
     // when not walking.
     static constexpr int WALK_FRAMES = 4;
@@ -167,6 +169,10 @@ private:
     // not restart on every tile; negative when standing.
     float m_walkClock = -1.0f;
     float m_standingFor = 0.0f;
+    // Movement left over when a step ended partway through a frame. The next
+    // step starts with it if it begins straight away, so holding a direction
+    // moves at an even speed instead of losing a little at every tile.
+    float m_stepOverflow = 0.0f;
     
     int m_textureIndex;
 

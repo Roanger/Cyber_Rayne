@@ -81,6 +81,7 @@ add_executable(CyberRayne
     src/ui/BattleScene.cpp
     src/ui/SpriteLibrary.cpp
     src/systems/InputConfig.cpp
+    src/systems/InputState.cpp
     src/graphics/VulkanRenderer.cpp
     src/graphics/TileTextureGen.cpp
     src/ui/MenuSystem.cpp
@@ -184,6 +185,7 @@ add_executable(Phase5Test
     src/tests/Phase5Test.cpp
     src/systems/AudioManager.cpp
     src/systems/InputConfig.cpp
+    src/systems/InputState.cpp
 )
 
 add_executable(AbilityTest

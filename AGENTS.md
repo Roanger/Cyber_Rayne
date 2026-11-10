@@ -410,6 +410,35 @@ sheets pushed the count past it. The pool is now sized from
 instead of throwing. About 65 textures are loaded before any sprite sheet, most of them
 tiles generated per map.
 
+**Hold-to-walk and controllers (user request, 2026-11-10).** The game is meant to be
+played on a controller (the user has a DualSense; Xbox and Steam pads must work too).
+- `InputState` (`systems/InputState`, Vulkan-free, tested in `Phase5Test`) takes "which
+  actions are held" each frame and produces press events, repeats for held directions
+  (menus scroll), and the held direction (newest pressed wins). Keyboard and controller
+  both feed it from `Game.cpp`.
+- While exploring, `GameState` starts the next step in the same frame the last one ended,
+  and `Player` carries leftover movement into it, so held walking is an even 8 tiles/s
+  with no pause per tile. Walking into an NPC turns to face them.
+- Controllers are read with GLFW's gamepad API (`pollGamepads` in `Game.cpp`): stick or
+  D-pad moves, A/Cross confirms, B/Circle cancels, Start/Options or Y/Triangle opens the
+  pause menu. **Linux only**: the Windows build does not use GLFW and would need XInput.
+- Not done: controller buttons cannot be rebound; on-screen hints still say "Enter" and
+  "Esc"; movement is still tile by tile (no free analog movement); no rumble.
+
+**Window follows its real size (2026-11-10).** The user runs Niri, which tiles the window
+to its own size (for example 1130x1378). The swap chain was always 1920x1080 and got
+squashed to fit, so tiles were tall and narrow and walking up or down looked much faster
+than sideways. `chooseSwapExtent` now asks GLFW for the real size, `drawFrame` rebuilds
+the swap chain when the size changes (`recreateSwapChain`; Wayland never reports
+out-of-date, so sizes are compared each frame), the window is resizable, and the title
+menu lays its buttons out again on a size change. Every other screen already laid out
+from the swap chain size each frame. Not checked: very small windows, and the Windows
+build (unchanged).
+
+**Enemies now choose targets at random** (`BattleSystem::pickEnemyTargetIndex`). They
+always hit the first living member, which was always Rayne. `BalanceTest` still reads
+100% everywhere, so the phase 13 "too easy" note stands.
+
 Remaining:
 - Menu UI art: `ui/cursor.png`, `ui/menu_background.png`, `ui/namebanner.png` are the last
   three validator failures. Then make the validator blocking in CI.
@@ -428,12 +457,7 @@ Remaining:
 
 ### Backlog (not yet assigned to a phase)
 
-- **Window cannot be resized** (user report, 2026-11-10; "can be later"). The user runs
-  Niri, a tiling compositor, and its resize command does nothing. Cause:
-  `glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE)` in `VulkanRenderer.cpp`. Enabling it also
-  needs working swapchain recreation on resize, and every screen lays out from the
-  swapchain extent already, but the menus build their button layouts once and would need
-  rebuilding when the size changes.
+- Nothing open. (The window-resize item was done on 2026-11-10; see phase 11 notes.)
 
 ## Working Rules
 

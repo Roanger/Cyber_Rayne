@@ -275,6 +275,11 @@ void GameState::update(float deltaTime) {
                 if (encountered) {
                     m_battleTag = m_world->getActiveEncounterTag();
                     m_currentState = State::BATTLE;
+                } else if (m_heldDx != 0 || m_heldDy != 0) {
+                    // A direction is held: start the next step in the same
+                    // frame the last one ended, so walking never pauses
+                    // between tiles.
+                    tryStep(m_heldDx, m_heldDy);
                 }
             }
             break;
@@ -588,12 +593,6 @@ void GameState::handleExplorationInput(InputAction action) {
         return;
     }
 
-    Map* currentMap = m_world->getCurrentMap();
-    Player* leader = m_party->getLeader();
-    if (!currentMap || !leader) {
-        return;
-    }
-
     int dx = 0;
     int dy = 0;
     switch (action) {
@@ -608,10 +607,21 @@ void GameState::handleExplorationInput(InputAction action) {
             return;
     }
 
-    // NPCs are solid: you talk to them, you don't walk through them.
+    tryStep(dx, dy);
+}
+
+void GameState::tryStep(int dx, int dy) {
+    Map* currentMap = m_world ? m_world->getCurrentMap() : nullptr;
+    Player* leader = m_party ? m_party->getLeader() : nullptr;
+    if (!currentMap || !leader || leader->isMoving()) {
+        return;
+    }
+    // NPCs are solid: you talk to them, you don't walk through them. Still
+    // turn to face them, so it is clear who Confirm will talk to.
     const int targetX = static_cast<int>(leader->getX()) + dx;
     const int targetY = static_cast<int>(leader->getY()) + dy;
-    if (!leader->isMoving() && m_world->isNpcAt(targetX, targetY)) {
+    if (m_world->isNpcAt(targetX, targetY)) {
+        leader->face(dx, dy);
         return;
     }
     leader->move(static_cast<float>(dx), static_cast<float>(dy), currentMap);

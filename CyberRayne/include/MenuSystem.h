@@ -54,4 +54,7 @@ private:
     std::unique_ptr<TextRenderer> m_textRenderer;
     UIRoot m_menuRoot;
     std::vector<UIButton*> m_menuButtons;
+    // Window size the buttons were laid out for.
+    int m_layoutW = 0;
+    int m_layoutH = 0;
 };

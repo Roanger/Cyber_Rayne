@@ -111,8 +111,14 @@ void MenuSystem::render(VulkanRenderer* renderer) {
     }
     renderMenuBackground(renderer);
 
-    if (m_menuButtons.empty()) {
+    // Buttons are placed in pixels, so lay them out again if the window
+    // changed size.
+    const int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
+    const int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
+    if (m_menuButtons.empty() || screenW != m_layoutW || screenH != m_layoutH) {
         buildMenuButtons(renderer);
+        m_layoutW = screenW;
+        m_layoutH = screenH;
     }
 
     m_menuRoot.render(renderer, m_textRenderer.get());
