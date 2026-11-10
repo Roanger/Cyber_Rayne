@@ -323,19 +323,75 @@ costs. Legacy fantasy enemy types were not retuned (unused by any encounter tabl
 
 17 CTest suites pass.
 
+### Phase 10: Battle Presentation — COMPLETE (2026-11-10)
+
+Battles are now a scene instead of bars on a blank screen.
+
+- **`BattleSystem` reports what happened** through `takeEvents()`: ACTION, DAMAGE, HEAL,
+  DEFEATED, MESSAGE. HP changes are found by comparing health before and after each step,
+  so every source (attacks, abilities, items, poison, regen) is reported without each
+  having to remember to. The logic still resolves instantly; the screen plays it back.
+- **`ui/BattleFx`** (Vulkan-free, tested) turns events into floating numbers, a hit flash
+  and shake, the attacker's lunge, defeated enemies fading out, and an action banner.
+  `GameState` waits for `isBusy()` to clear before leaving the battle, so the last hit is seen.
+- **`ui/BattleScene`** draws a per-district skyline backdrop (generated from rectangles, no
+  image files), enemies on the left and party on the right in diagonal lines, enemy name
+  and HP bars, status tags, and turn / target markers. It keeps every enemy's place on
+  screen for the whole fight; `BattleSystem::getEnemies()` shrinks as enemies die.
+- **`UIManager`** is now a Rosé Pine command panel plus a party panel with HP, MP and turn
+  gauges. The `UIButton`-based battle menu is gone. The known gap from 9b is fixed:
+  single-ally abilities list allies (`getLivingAllies()` order), not enemies.
+- **`ui/SpriteLibrary`** loads art by name on first use:
+  `assets/<category>/<spriteSlug(display name)>.png`. A new enemy or NPC needs a file, not
+  code. Missing files draw a coloured block. `Sprite` already carries a `cols`/`rows` grid
+  for animation sheets.
+- **The map draws sprites too.** `World::render(renderer, sprites)` draws NPCs, enemies and
+  the party leader together, sorted by row so whoever stands lower overlaps those behind.
+  Story fights keep a gold plate under the feet.
+
+**Bugs fixed along the way:**
+- **Every UI colour was washed out.** The swapchain is an sRGB format, but tint colours were
+  passed through as if linear, so `Theme::BASE` (#191724) displayed as a mid grey-purple.
+  `VulkanRenderer::renderSprite*` now converts tints with `srgbToLinear`. **Pass colours to
+  the renderer as they should look on screen.** Translucent layers blend in linear light,
+  so a bright colour under a translucent dark one shows through more than the alpha
+  suggests (`Theme::drawPanel` draws its border as strips for this reason).
+- A member revived mid-battle never got another turn (fallen members are dropped from the
+  turn order and were never put back).
+
+Dev shortcut: `CYBERRAYNE_START=battle` starts a new game inside a mixed fight.
+
+18 CTest suites pass (new: `BattlePresentationTest`).
+
+**Not verified by hand:** a full fight played with the keyboard on the new screen (item and
+ally-ability targeting, the result card over the battlefield). Hit flash tints red; a white
+flash needs a shader change because tint multiplies the image.
+
 ## Current Phase
 
-### Phase 10: Battle Presentation — NEXT
+### Phase 11: Slice Art — IN PROGRESS
 
-- Enemy and party sprites in battle, battle background.
-- MP bars, status-effect indicators, damage numbers, hit flash.
+Done (2026-11-10):
+- The user generated all 17 base sprites (Rayne x3, Cyph, Vash, 5 enemies, 7 NPCs) into
+  `CyberRayne/Raw/`, with prompts beside them. **`Raw/` is the user's working folder; do
+  not modify it.**
+- **Sprite spec changed to 96x128, original colours.** At the old 48x64 with the 16-colour
+  palette the art lost faces, hair colour and skin tone. Characters, enemies and NPCs are
+  conformed with `spriteprep.py --no-palette`; enemies may be 96x96 to 192x192 (Security
+  Drone 112x104, Corporate Enforcer 144x192). `tools/asset_spec.py` and `ASSET_SPEC.md`
+  are updated.
+- All 17 are conformed into `assets/` and drawn in battle, on the map and on character
+  select. Cyph and Vash have their own files.
 
-### Phase 11: Slice Art
-
-- Only what the slice needs: Rayne (3 classes), Cyph, Vash, 5 enemy types plus the
-  boss, 4 NPCs, menu UI.
-- Prompt list per sprite → user generates → `spriteprep.py` → validator at zero failures,
-  then make the validator blocking in CI.
+Remaining:
+- **Animation sheets.** The user is generating 4x4 sheets into `Raw/sheets/`:
+  `<name>_walk.png` (rows: down, left, right, up) and `<name>_battle.png` (rows: idle,
+  attack, ability, guard; party faces screen-left), plus `<npc>_idle_talk.png`. Needed:
+  conform them (the walk sheets seen so far have a hazy, not flat, backdrop that the
+  cutout must cope with), a sheet rule in the validator, facing/step state for the map,
+  and animation selection in `BattleScene` from `BattleFx` state.
+- Menu UI art: `ui/cursor.png`, `ui/menu_background.png`, `ui/namebanner.png` are the last
+  three validator failures. Then make the validator blocking in CI.
 - Fix the hologram tile alpha (reads as a solid cyan floor).
 
 ### Phase 12: Audio
@@ -348,6 +404,15 @@ costs. Legacy fantasy enemy types were not retuned (unused by any encounter tabl
 - Tuning pass for a 20-30 minute slice.
 - Automated scripted-playthrough test of the full quest chain.
 - Full manual playthrough.
+
+### Backlog (not yet assigned to a phase)
+
+- **Window cannot be resized** (user report, 2026-11-10; "can be later"). The user runs
+  Niri, a tiling compositor, and its resize command does nothing. Cause:
+  `glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE)` in `VulkanRenderer.cpp`. Enabling it also
+  needs working swapchain recreation on resize, and every screen lays out from the
+  swapchain extent already, but the menus build their button layouts once and would need
+  rebuilding when the size changes.
 
 ## Working Rules
 

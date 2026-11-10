@@ -5,6 +5,7 @@
 #include <queue>
 
 #include <string>
+#include <utility>
 
 #include "Inventory.h"
 
@@ -57,6 +58,22 @@ public:
         ENDED
     };
 
+    // Something that happened in the fight, for the presentation layer to
+    // show. The logic resolves instantly; the screen plays these back.
+    struct BattleEvent {
+        enum class Kind {
+            ACTION,    // subject acted; text names the action
+            DAMAGE,    // subject lost `amount` HP
+            HEAL,      // subject gained `amount` HP
+            DEFEATED,  // subject went down
+            MESSAGE    // text only (stunned, failed to flee)
+        };
+        Kind kind = Kind::MESSAGE;
+        Combatant* subject = nullptr;
+        int amount = 0;
+        std::string text;
+    };
+
     explicit BattleSystem(Party* party);
     ~BattleSystem();
 
@@ -77,6 +94,10 @@ public:
     // ActionRequest::targetIndex refers to.
     std::vector<Combatant*> getLivingEnemies() const;
     std::vector<Combatant*> getLivingAllies() const;
+
+    // Everything that happened since the last call, oldest first. Clears the
+    // queue. Subjects stay valid for the length of the battle.
+    std::vector<BattleEvent> takeEvents();
 
     // Why the last submitPlayerAction was rejected, for UI feedback.
     const std::string& getLastRejectionReason() const { return m_lastRejection; }
@@ -122,6 +143,14 @@ private:
     Combatant* getFirstLivingPlayer() const;
 
     void checkBattleEnd();
+
+    // HP changes are detected by comparing before and after, so every source
+    // (attacks, abilities, items, poison, regen) is reported without each one
+    // having to remember to.
+    using HealthSnapshot = std::vector<std::pair<Combatant*, int>>;
+    HealthSnapshot snapshotHealth() const;
+    void emitHealthChanges(const HealthSnapshot& before);
+    void emitAction(Combatant* actor, const std::string& text);
     void removeDefeatedEnemies();
 
     Party* m_party;
@@ -136,4 +165,5 @@ private:
     int m_goldEarned;
     std::vector<Combatant*> m_rewardedEnemies;
     std::string m_lastRejection;
+    std::vector<BattleEvent> m_events;
 };

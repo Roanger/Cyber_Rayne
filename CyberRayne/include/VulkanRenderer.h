@@ -119,6 +119,8 @@ public:
     // Convenience: render a solid colored rectangle using the white texture
     void renderColoredRectPixels(int leftPx, int topPx, int widthPx, int heightPx,
                                  float r, float g, float b, float a = 1.0f);
+    // Pixel size of a loaded texture. False if the index is not a texture.
+    bool getTextureSize(int textureIndex, int& width, int& height) const;
     // Returns the index of the 1x1 white fallback texture
     int getWhiteTextureIndex() const { return 0; }
     // Accessor for current swapchain extent (used for pixel -> NDC conversions)

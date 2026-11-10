@@ -17,9 +17,10 @@ phase live in [AGENTS.md](AGENTS.md).
 - A shared party bag with healing items and equipment, usable in battle and from the pause menu
 - Save anywhere from the pause menu; saves live in `~/.local/share/CyberRayne/`
 - Rebindable keys (Settings), stored in `~/.config/CyberRayne/input.cfg`
+- A battle screen with character and enemy sprites, damage numbers and status tags
 - Procedurally generated pixel-art tiles
 
-Still to come: battle sprites and effects, audio, and final art.
+Still to come: character animation, audio, and menu art.
 
 ## Building (Linux)
 
@@ -40,7 +41,8 @@ cd CyberRayne/out/build/linux-debug
 ```
 
 `CYBERRAYNE_START=world ./CyberRayne` skips the menus and drops straight into
-exploration. `CYBERRAYNE_START=load` resumes the saved game.
+exploration. `CYBERRAYNE_START=load` resumes the saved game, and
+`CYBERRAYNE_START=battle` starts inside a test fight.
 
 Windows presets (`x64-debug`, `x64-release`) exist in `CMakePresets.json` and need the
 Vulkan SDK.

@@ -3,9 +3,15 @@
 Both validate_assets.py and spriteprep.py import from here, so the spec cannot
 drift between what we produce and what we check.
 
-Why these numbers: Map::VIEWPORT_HEIGHT_TILES is 15, so at 1080p one 32px tile
-covers ~72 screen pixels (a 2.25x upscale). Characters are authored 2 tiles tall
-so they read clearly against the ground without dwarfing it.
+Why these numbers: Map::VIEWPORT_HEIGHT_TILES is 15, so at 1080p one tile covers
+72 screen pixels. Characters are 96x128: drawn 1:1 on the map (a little wider
+than a tile, under two tiles tall) and at exactly 2x in battle, so the pixels
+stay square in both places.
+
+Characters were 48x64 until 2026-11-10. The generated slice art is too detailed
+for that: shrunk to 48x64 and snapped to the 16-colour palette it lost faces,
+hair colour and skin tone. Character art is therefore conformed with
+--no-palette; the palette still applies to tiles and UI.
 """
 
 from dataclasses import dataclass, field
@@ -46,20 +52,23 @@ class CategorySpec:
 SPECS: list[CategorySpec] = [
     CategorySpec(
         directory="characters",
-        size=(48, 64),
-        notes="Party members. One file per class, named from Player::classToString() "
-              "lowercased: netrunner.png, solo.png, infiltrator.png.",
+        size=(96, 128),
+        notes="Party members. Rayne has one file per class, named from "
+              "Player::classToString() lowercased: netrunner.png, solo.png, "
+              "infiltrator.png. Companions use their own name: cyph.png, vash.png.",
     ),
     CategorySpec(
         directory="enemies",
-        size=(48, 64),
-        max_size=(96, 96),
-        notes="Bosses may use the full 96x96. Grunts should stay near 48x64.",
+        size=(96, 96),
+        max_size=(192, 192),
+        notes="Named from the enemy's display name: 'Street Thug' -> street_thug.png. "
+              "Human-sized enemies are 96x128; bosses may go up to 192x192.",
     ),
     CategorySpec(
         directory="npcs",
-        size=(48, 64),
-        notes="Same silhouette budget as party members.",
+        size=(96, 128),
+        notes="Same size as party members. Named from the NPC's display name: "
+              "'Fixer Kaga' -> fixer_kaga.png.",
     ),
     CategorySpec(
         directory="items",

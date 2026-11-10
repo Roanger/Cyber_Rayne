@@ -14,8 +14,14 @@ void fillRect(VulkanRenderer* renderer, int x, int y, int w, int h, uint32_t col
 
 void drawPanel(VulkanRenderer* renderer, int x, int y, int w, int h) {
     const int border = 3;
-    fillRect(renderer, x, y, w, h, IRIS);
+    // The border is four strips, not a filled rectangle under the body:
+    // a bright colour showing through a translucent body lightens it far
+    // more than the alpha suggests.
     fillRect(renderer, x + border, y + border, w - 2 * border, h - 2 * border, BASE, 0.94f);
+    fillRect(renderer, x, y, w, border, IRIS);
+    fillRect(renderer, x, y + h - border, w, border, IRIS);
+    fillRect(renderer, x, y + border, border, h - 2 * border, IRIS);
+    fillRect(renderer, x + w - border, y + border, border, h - 2 * border, IRIS);
 }
 
 void dimScreen(VulkanRenderer* renderer, float alpha) {

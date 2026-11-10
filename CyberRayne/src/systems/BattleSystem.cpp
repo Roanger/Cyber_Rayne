@@ -48,6 +48,7 @@ void BattleSystem::startBattle(const std::vector<std::unique_ptr<Enemy>>& enemie
     m_lastRejection.clear();
     // Stale pointers here would leak into the next battle's reward dedupe.
     m_rewardedEnemies.clear();
+    m_events.clear();
     while (!m_readyQueue.empty()) {
         m_readyQueue.pop();
     }
@@ -92,6 +93,8 @@ void BattleSystem::update(float deltaTime) {
         return;
     }
 
+    const HealthSnapshot before = snapshotHealth();
+
     // Tick status effects and fill gauges for all living combatants.
     for (auto* combatant : m_combatants) {
         if (!combatant || !combatant->isAlive()) {
@@ -119,6 +122,10 @@ void BattleSystem::update(float deltaTime) {
     }
 
     // Remove defeated enemies from the active combatant list after status ticks.
+    // Report poison and regen ticks before anyone acts, so a tick and a hit
+    // on the same frame show as two numbers.
+    emitHealthChanges(before);
+
     removeDefeatedEnemies();
     checkBattleEnd();
     if (m_battleResult != BattleResult::ONGOING) {
@@ -127,7 +134,9 @@ void BattleSystem::update(float deltaTime) {
     }
 
     if (m_state == State::FILLING_GAUGES) {
+        const HealthSnapshot beforeTurn = snapshotHealth();
         processReadyCombatants();
+        emitHealthChanges(beforeTurn);
     }
 }
 
@@ -156,6 +165,7 @@ void BattleSystem::processReadyCombatants() {
     // A stunned combatant forfeits the turn it just earned.
     if (actor->isStunned()) {
         std::cout << actor->getName() << " is stunned and loses the turn!" << std::endl;
+        m_events.push_back({BattleEvent::Kind::MESSAGE, actor, 0, "Stunned"});
         actor->resetAtb();
         return;
     }
@@ -277,7 +287,9 @@ bool BattleSystem::submitPlayerAction(const ActionRequest& request) {
     }
 
     m_state = State::EXECUTING;
+    const HealthSnapshot before = snapshotHealth();
     executePlayerAction(m_currentActor, request);
+    emitHealthChanges(before);
 
     m_currentActor->resetAtb();
     m_currentActor = nullptr;
@@ -360,6 +372,7 @@ void BattleSystem::executeEnemyTurn(Combatant* enemy) {
         auto targets = resolveTargets(enemy, *chosen, -1);
         if (!targets.empty()) {
             chosen->payCost(enemy);
+            emitAction(enemy, chosen->getName());
             chosen->execute(enemy, targets);
             return;
         }
@@ -397,6 +410,7 @@ void BattleSystem::executePlayerAction(Combatant* actor, const ActionRequest& re
             const Ability* ability = actor->getAbilities()[request.abilityIndex];
             auto targets = resolveTargets(actor, *ability, request.targetIndex);
             ability->payCost(actor);
+            emitAction(actor, ability->getName());
             ability->execute(actor, targets);
             break;
         }
@@ -427,6 +441,7 @@ void BattleSystem::executeAttack(Combatant* actor, Combatant* target) {
 
     std::cout << actor->getName() << " attacks " << target->getName()
               << " for " << damage << " damage!" << std::endl;
+    emitAction(actor, "Attack");
     target->takeDamage(damage);
 }
 
@@ -465,13 +480,24 @@ void BattleSystem::executeItem(Combatant* actor, int itemIndex, Player* target) 
     const std::string itemId = stack->id;
     std::cout << actor->getName() << " uses " << stack->prototype->getName() << " on "
               << target->getName() << std::endl;
+    emitAction(actor, stack->prototype->getName());
     stack->prototype->use(target);
+    // Fallen members are dropped from the turn order, so someone brought back
+    // has to be put into it again or they would stand there for the rest of
+    // the fight.
+    if (target->isAlive() &&
+        std::find(m_combatants.begin(), m_combatants.end(), target) == m_combatants.end()) {
+        target->resetAtb();
+        target->setDefending(false);
+        m_combatants.push_back(target);
+    }
     m_party->getBag().remove(itemId, 1);
 }
 
 void BattleSystem::executeDefend(Combatant* actor) {
     if (!actor) return;
     actor->setDefending(true);
+    emitAction(actor, "Defend");
     std::cout << actor->getName() << " takes a defensive stance." << std::endl;
 }
 
@@ -482,6 +508,7 @@ void BattleSystem::executeFlee() {
         m_state = State::ENDED;
     } else {
         std::cout << "The party failed to flee!" << std::endl;
+        m_events.push_back({BattleEvent::Kind::MESSAGE, m_currentActor, 0, "Couldn't escape"});
     }
 }
 
@@ -565,4 +592,43 @@ void BattleSystem::checkBattleEnd() {
             std::cout << "Party earned " << m_expEarned << " XP and " << m_goldEarned << " gold!" << std::endl;
         }
     }
+}
+
+BattleSystem::HealthSnapshot BattleSystem::snapshotHealth() const {
+    HealthSnapshot snapshot;
+    // Party members are read from the party, not m_combatants, so that someone
+    // revived by an item mid-battle is still reported.
+    if (m_party) {
+        for (const auto& member : m_party->getMembers()) {
+            if (member) snapshot.emplace_back(member.get(), member->getHealth());
+        }
+    }
+    for (Combatant* enemy : m_enemyCombatants) {
+        if (enemy) snapshot.emplace_back(enemy, enemy->getHealth());
+    }
+    return snapshot;
+}
+
+void BattleSystem::emitHealthChanges(const HealthSnapshot& before) {
+    for (const auto& [combatant, oldHealth] : before) {
+        const int now = combatant->getHealth();
+        if (now < oldHealth) {
+            m_events.push_back({BattleEvent::Kind::DAMAGE, combatant, oldHealth - now, {}});
+            if (now <= 0) {
+                m_events.push_back({BattleEvent::Kind::DEFEATED, combatant, 0, {}});
+            }
+        } else if (now > oldHealth) {
+            m_events.push_back({BattleEvent::Kind::HEAL, combatant, now - oldHealth, {}});
+        }
+    }
+}
+
+void BattleSystem::emitAction(Combatant* actor, const std::string& text) {
+    m_events.push_back({BattleEvent::Kind::ACTION, actor, 0, text});
+}
+
+std::vector<BattleSystem::BattleEvent> BattleSystem::takeEvents() {
+    std::vector<BattleEvent> events;
+    events.swap(m_events);
+    return events;
 }

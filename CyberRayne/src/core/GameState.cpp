@@ -1,3 +1,6 @@
+#include "../../include/EnemyTypes.h"
+#include "../../include/ui/BattleScene.h"
+#include "../../include/ui/SpriteLibrary.h"
 #include "../../include/GameState.h"
 #include "../../include/Player.h"
 #include "../../include/Party.h"
@@ -59,6 +62,10 @@ void GameState::setRenderer(VulkanRenderer* renderer) {
     if (m_storyHud && m_renderer) {
         m_storyHud->initialize(m_renderer);
     }
+
+    if (m_renderer) {
+        m_sprites = std::make_unique<SpriteLibrary>(m_renderer);
+    }
 }
 
 bool GameState::initialize() {
@@ -96,6 +103,10 @@ bool GameState::initialize() {
     m_pauseMenu = std::make_unique<PauseMenu>();
     m_settingsMenu = std::make_unique<SettingsMenu>();
     m_battleSummary = std::make_unique<BattleSummary>();
+    m_battleScene = std::make_unique<BattleScene>();
+    if (m_renderer && !m_sprites) {
+        m_sprites = std::make_unique<SpriteLibrary>(m_renderer);
+    }
     if (m_renderer) {
         m_storyHud->initialize(m_renderer);
     }
@@ -127,6 +138,10 @@ bool GameState::initialize() {
         m_pendingDevStart = (std::string(start) == "world");
         // CYBERRAYNE_START=load resumes the saved game straight away.
         m_pendingDevLoad = (std::string(start) == "load");
+        // CYBERRAYNE_START=battle starts a new game inside a mixed fight, for
+        // working on the battle screen.
+        m_pendingDevBattle = (std::string(start) == "battle");
+        m_pendingDevStart = m_pendingDevStart || m_pendingDevBattle;
     }
 
     std::cout << "Game state initialized successfully." << std::endl;
@@ -144,6 +159,18 @@ void GameState::update(float deltaTime) {
             m_charSelectionSystem->confirmSelection();
         }
         startNewGame();
+    }
+
+    if (m_pendingDevBattle) {
+        m_pendingDevBattle = false;
+        if (m_world) {
+            std::vector<std::unique_ptr<Enemy>> foes;
+            foes.push_back(std::make_unique<StreetThug>(1));
+            foes.push_back(std::make_unique<SecurityDrone>(1));
+            foes.push_back(std::make_unique<CorporateEnforcer>(1));
+            m_world->startEncounterWith(std::move(foes));
+            m_currentState = State::BATTLE;
+        }
     }
 
     if (m_pendingDevLoad) {
@@ -275,6 +302,13 @@ void GameState::update(float deltaTime) {
                 if (m_uiManager) {
                     m_uiManager->setParty(m_party.get());
                 }
+                if (m_battleScene) {
+                    // Taken before anyone falls: the scene keeps every enemy's
+                    // place on screen for the whole fight.
+                    const Map* map = m_world->getCurrentMap();
+                    m_battleScene->begin(m_party.get(), m_battleSystem->getEnemies(),
+                                         map ? map->getName() : std::string());
+                }
 
                 m_levelsBeforeBattle.clear();
                 for (const auto& member : m_party->getMembers()) {
@@ -299,7 +333,14 @@ void GameState::update(float deltaTime) {
                     m_uiManager->setCurrentActor(m_battleSystem->getCurrentActor());
                 }
 
-                if (m_battleSystem->getResult() != BattleSystem::BattleResult::ONGOING) {
+                if (m_battleScene) {
+                    m_battleScene->onEvents(m_battleSystem->takeEvents());
+                    m_battleScene->update(deltaTime);
+                }
+
+                // Let the last hit play out before leaving the battle screen.
+                if (m_battleSystem->getResult() != BattleSystem::BattleResult::ONGOING &&
+                    !(m_battleScene && m_battleScene->isBusy())) {
                     finishBattle();
                 }
             }
@@ -333,20 +374,24 @@ void GameState::render(VulkanRenderer* renderer) {
             renderWorldScene(renderer);
             break;
         case State::BATTLE_RESULT:
+            // The battlefield, now empty of enemies, stays behind the card.
+            if (m_battleScene && m_uiManager && m_sprites) {
+                m_battleScene->render(renderer, m_uiManager->text(), m_sprites.get(), nullptr, nullptr);
+            }
             if (m_storyHud && m_battleSummary) {
                 m_storyHud->renderBattleResult(renderer, *m_battleSummary);
             }
             break;
         case State::BATTLE:
-            // Render battle
-            // Render a simple background for battle
-            renderer->renderSprite(0.0f, 0.0f, 2.0f, 2.0f);
-            
-            // Render Battle UI
-            if (m_uiManager && m_battleSystem) {
-                if (m_party) {
-                    m_uiManager->renderBattleUI(renderer, m_party.get(), m_battleSystem->getEnemies());
+            if (m_uiManager && m_battleSystem && m_party) {
+                if (m_battleScene && m_sprites) {
+                    m_battleScene->render(renderer, m_uiManager->text(), m_sprites.get(),
+                                          m_battleSystem->getCurrentActor(),
+                                          m_uiManager->getHighlightedTarget());
                 }
+                m_uiManager->renderBattleUI(renderer, m_party.get(),
+                                            m_battleSystem->getLivingEnemies(),
+                                            m_battleSystem->getLivingAllies());
             }
             break;
         case State::SETTINGS:
@@ -373,31 +418,12 @@ void GameState::render(VulkanRenderer* renderer) {
 
 void GameState::renderWorldScene(VulkanRenderer* renderer) {
     if (m_world) {
-        m_world->render(renderer);
+        // Draws the map, then NPCs, enemies and the party leader together,
+        // sorted so whoever stands lower on screen is in front.
+        m_world->render(renderer, m_sprites.get());
     }
 
     Player* leader = m_party ? m_party->getLeader() : nullptr;
-    if (leader && m_world && m_world->getCurrentMap()) {
-        // Calculate viewport matching Map::render
-        Map* currentMap = m_world->getCurrentMap();
-        float screenAspect = static_cast<float>(renderer->getSwapchainExtent().width) /
-                             static_cast<float>(renderer->getSwapchainExtent().height);
-        // Same viewport the map and entities use, so the player lines up with
-        // the tiles it is standing on.
-        Map::Viewport vp = currentMap->getViewport(screenAspect);
-
-        float normalizedX = 0.0f;
-        float normalizedY = 0.0f;
-        currentMap->worldToNdc(vp, leader->getX(), leader->getY(), normalizedX, normalizedY);
-
-        // Render player
-        int textureIndex = leader->getTextureIndex();
-        if (textureIndex >= 0) {
-            renderer->renderSpriteWithTexture(normalizedX, normalizedY, vp.tileWidth, vp.tileHeight, textureIndex);
-        } else {
-            renderer->renderSprite(normalizedX, normalizedY, vp.tileWidth, vp.tileHeight);
-        }
-    }
 
     // Story overlay goes on last so it sits above the world and the player.
     if (m_currentState == State::WORLD_EXPLORATION && m_storyHud && m_world && m_world->getCurrentMap()) {
@@ -478,6 +504,10 @@ void GameState::finishBattle() {
     const int expEarned = m_battleSystem->getExperienceEarned();
     const int goldEarned = m_battleSystem->getGoldEarned();
     m_battleSystem.reset();
+    // The scene points at the enemies, which are destroyed just below.
+    if (m_battleScene) {
+        m_battleScene->clearEnemies();
+    }
 
     // Release the encounter group however the fight ended. The enemies were
     // already taken off the map when the encounter began, so there is nothing

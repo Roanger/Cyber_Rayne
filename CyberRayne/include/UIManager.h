@@ -6,10 +6,6 @@
 #include <memory>
 #include "InputAction.h"
 #include "BattleSystem.h"
-#include "ui/UIButton.h"
-#include "ui/UIProgressBar.h"
-#include "ui/UILabel.h"
-#include "ui/UIRoot.h"
 #include "ui/TextRenderer.h"
 
 class VulkanRenderer;
@@ -40,7 +36,14 @@ public:
     void loadTextures(VulkanRenderer* renderer);
 
     // Battle UI methods
-    void renderBattleUI(VulkanRenderer* renderer, Party* party, const std::vector<Combatant*>& enemies);
+    // enemies and allies are the living combatants on each side, in the order
+    // BattleSystem counts target indices.
+    void renderBattleUI(VulkanRenderer* renderer, Party* party,
+                        const std::vector<Combatant*>& enemies,
+                        const std::vector<Combatant*>& allies);
+    // Who the target cursor is on right now, or null when not choosing one.
+    const Combatant* getHighlightedTarget() const;
+    TextRenderer* text() const { return m_textRenderer.get(); }
     void handleInput(InputAction action);
 
     // State management
@@ -58,7 +61,7 @@ public:
     void setCurrentActor(Combatant* actor);
 
     // The party whose bag the Item menu lists. Set when a battle starts.
-    void setParty(Party* party) { m_party = party; m_menuDirty = true; }
+    void setParty(Party* party) { m_party = party; refreshEntries(); }
 
     // Number of entries in the list currently on screen. Exposed so the
     // navigation logic can be exercised without a renderer.
@@ -78,10 +81,10 @@ private:
         bool enabled = true;
     };
 
-    void rebuildBattleMenu(VulkanRenderer* renderer);
-    void updateButtonSelection();
-    void renderBattleMenu(VulkanRenderer* renderer);
-    void renderStats(VulkanRenderer* renderer, Party* party, const std::vector<Combatant*>& enemies);
+    void renderCommandPanel(VulkanRenderer* renderer, int x, int y, int w, int h);
+    void renderPartyPanel(VulkanRenderer* renderer, Party* party, int x, int y, int w, int h);
+    // True when the pending item or ability is aimed at the party.
+    bool targetingAllies() const;
 
     // Rebuild m_entries for the current state and actor.
     void refreshEntries();
@@ -95,7 +98,6 @@ private:
     BattleMenuState m_battleState;
     ActionRequest m_request;
     bool m_actionSelected;
-    bool m_menuDirty = true;
 
     // Selection indices
     int m_menuIndex;
@@ -107,20 +109,14 @@ private:
 
     // Reusable UI primitives
     std::unique_ptr<TextRenderer> m_textRenderer;
-    UIRoot m_battleRoot;
-    std::vector<UIButton*> m_battleButtons;
-    std::unique_ptr<UILabel> m_turnLabel;
 
     // Currently acting combatant (whose menu is shown)
     Combatant* m_currentActor;
     Party* m_party = nullptr;
-    // Living enemies, refreshed each render, used for target selection.
+    // Living combatants on each side, refreshed each render, used for target
+    // selection.
     std::vector<Combatant*> m_targets;
+    std::vector<Combatant*> m_allies;
 
-    // Layout constants
-    static constexpr int BUTTON_WIDTH = 300;
-    static constexpr int BUTTON_HEIGHT = 110;
-    static constexpr int MENU_START_X = 50;
-    static constexpr int MENU_START_Y_OFFSET = 50;
     static constexpr int MENU_COLUMNS = 2;
 };

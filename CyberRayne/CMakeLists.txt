@@ -77,6 +77,9 @@ add_executable(CyberRayne
     src/ui/PauseMenu.cpp
     src/ui/SettingsMenu.cpp
     src/ui/Theme.cpp
+    src/ui/BattleFx.cpp
+    src/ui/BattleScene.cpp
+    src/ui/SpriteLibrary.cpp
     src/systems/InputConfig.cpp
     src/graphics/VulkanRenderer.cpp
     src/graphics/TileTextureGen.cpp
@@ -246,6 +249,13 @@ add_executable(BalanceTest
     ${GAMEPLAY_TEST_SUPPORT_SOURCES}
 )
 
+add_executable(BattlePresentationTest
+    src/tests/BattlePresentationTest.cpp
+    src/systems/BattleSystem.cpp
+    src/ui/BattleFx.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
 add_executable(MenuTest
     src/tests/MenuTest.cpp
     src/ui/PauseMenu.cpp
@@ -254,7 +264,7 @@ add_executable(MenuTest
     ${GAMEPLAY_TEST_SUPPORT_SOURCES}
 )
 
-foreach(test_target CharacterSelectionTest BattleSystemTest EnemyTypesTest BitmapFontTest DialogueSystemTest QuestTest ProgressionTest SaveLoadTest ContentTest Phase5Test EncounterTest StatusEffectTest AbilityTest StoryTest MenuTest InventoryTest BalanceTest)
+foreach(test_target CharacterSelectionTest BattleSystemTest EnemyTypesTest BitmapFontTest DialogueSystemTest QuestTest ProgressionTest SaveLoadTest ContentTest Phase5Test EncounterTest StatusEffectTest AbilityTest StoryTest MenuTest InventoryTest BalanceTest BattlePresentationTest)
     target_include_directories(${test_target} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party

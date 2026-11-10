@@ -1,3 +1,8 @@
+#ifndef NO_VULKAN
+#include "../../include/ui/SpriteLibrary.h"
+#include "../../include/ui/Theme.h"
+#include <cmath>
+#endif
 #include "../../include/World.h"
 #include "../../include/Map.h"
 #include "../../include/Player.h"
@@ -64,50 +69,85 @@ void World::update(float deltaTime) {
     }
 }
 
-void World::render([[maybe_unused]] VulkanRenderer* renderer) {
+void World::render([[maybe_unused]] VulkanRenderer* renderer, [[maybe_unused]] SpriteLibrary* sprites) {
 #ifndef NO_VULKAN
-    if (m_currentMap) {
-        // Update viewport to follow player
-        if (m_player) {
-            m_currentMap->setPlayerViewport(m_player->getX(), m_player->getY());
-        }
-        m_currentMap->render(renderer);
+    if (!m_currentMap) {
+        return;
+    }
+    // Update viewport to follow player
+    if (m_player) {
+        m_currentMap->setPlayerViewport(m_player->getX(), m_player->getY());
+    }
+    m_currentMap->render(renderer);
 
-        // Entities live in world tile space and must go through the same
-        // viewport transform as the tiles, or they draw off-screen.
-        float screenAspect = static_cast<float>(renderer->getSwapchainExtent().width) /
-                             static_cast<float>(renderer->getSwapchainExtent().height);
-        Map::Viewport vp = m_currentMap->getViewport(screenAspect);
+    // Entities live in world tile space and must go through the same
+    // viewport transform as the tiles, or they draw off-screen.
+    const int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
+    const int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
+    Map::Viewport vp = m_currentMap->getViewport(static_cast<float>(screenW) / static_cast<float>(screenH));
+    const int tileW = static_cast<int>(vp.tileWidth * 0.5f * static_cast<float>(screenW));
+    const int tileH = static_cast<int>(vp.tileHeight * 0.5f * static_cast<float>(screenH));
 
+    struct Figure {
+        float worldY;
+        int centreX;   // pixel centre of the tile
+        int centreY;
+        const Sprite* sprite;
+        uint32_t fallback;  // block colour when there is no art
+        bool marker;        // story fight: gold plate under the feet
+    };
+    std::vector<Figure> figures;
+
+    auto add = [&](float wx, float wy, const Sprite* sprite, uint32_t fallback, bool marker) {
         float ndcX = 0.0f;
         float ndcY = 0.0f;
+        if (!m_currentMap->worldToNdc(vp, wx, wy, ndcX, ndcY)) return;
+        figures.push_back({wy,
+                           static_cast<int>((ndcX + 1.0f) * 0.5f * static_cast<float>(screenW)),
+                           static_cast<int>((ndcY + 1.0f) * 0.5f * static_cast<float>(screenH)),
+                           sprite, fallback, marker});
+    };
 
-        // Placeholder markers until per-entity sprites exist: cyan for NPCs,
-        // magenta for enemies.
-        for (const auto& npc : m_currentMap->getNPCs()) {
-            if (m_currentMap->worldToNdc(vp, npc->getX(), npc->getY(), ndcX, ndcY)) {
-                renderer->renderSprite(ndcX, ndcY, vp.tileWidth * 0.7f, vp.tileHeight * 0.7f,
-                                       0.2f, 0.9f, 1.0f, 1.0f);
-            }
+    for (const auto& npc : m_currentMap->getNPCs()) {
+        add(npc->getX(), npc->getY(), sprites ? &sprites->get("npcs", npc->getName()) : nullptr,
+            Theme::FOAM, false);
+    }
+    for (const auto& enemy : m_currentMap->getEnemies()) {
+        add(enemy->getX(), enemy->getY(),
+            sprites ? &sprites->get("enemies", enemy->getName()) : nullptr,
+            Theme::LOVE, isStoryMarker(enemy.get()));
+    }
+    if (m_player) {
+        add(m_player->getX(), m_player->getY(), sprites ? &sprites->forMember(*m_player) : nullptr,
+            Theme::TEXT, false);
+    }
+
+    // Whoever stands further down the screen is drawn last, so they overlap
+    // the ones behind. Sprites are taller than a tile.
+    std::stable_sort(figures.begin(), figures.end(),
+                     [](const Figure& a, const Figure& b) { return a.worldY < b.worldY; });
+
+    for (const Figure& figure : figures) {
+        const int feetY = figure.centreY + tileH / 2;
+        if (figure.marker) {
+            // Story fights stand out with a gold plate under the feet.
+            Theme::fillRect(renderer, figure.centreX - tileW / 2, feetY - 10, tileW, 10, Theme::GOLD, 0.85f);
         }
-
-        for (const auto& enemy : m_currentMap->getEnemies()) {
-            if (m_currentMap->worldToNdc(vp, enemy->getX(), enemy->getY(), ndcX, ndcY)) {
-                if (isStoryMarker(enemy.get())) {
-                    // Story fights stand out: larger and gold.
-                    renderer->renderSprite(ndcX, ndcY, vp.tileWidth * 0.95f, vp.tileHeight * 0.95f,
-                                           1.0f, 0.8f, 0.1f, 1.0f);
-                } else {
-                    renderer->renderSprite(ndcX, ndcY, vp.tileWidth * 0.8f, vp.tileHeight * 0.8f,
-                                           1.0f, 0.15f, 0.5f, 1.0f);
-                }
-            }
-        }
-
-
-        // Render the player using Vulkan
-        if (m_player) {
-            // The player is rendered separately in the GameState
+        if (figure.sprite && figure.sprite->valid()) {
+            // Whole-number scale, sized so a character is a little wider
+            // than a tile and stands with their feet on its bottom edge.
+            const int fw = figure.sprite->frameWidth();
+            const int fh = figure.sprite->frameHeight();
+            const int scale = std::max(1, static_cast<int>(std::lround(
+                static_cast<float>(tileW) * 1.3f / static_cast<float>(fw > 0 ? fw : 1))));
+            Theme::fillRect(renderer, figure.centreX - tileW * 3 / 10, feetY - 8, tileW * 6 / 10, 8,
+                            0xFF000000, 0.35f);
+            sprites->draw(*figure.sprite, figure.centreX - fw * scale / 2, feetY - 4 - fh * scale,
+                          fw * scale, fh * scale);
+        } else {
+            const int size = tileW * 7 / 10;
+            Theme::fillRect(renderer, figure.centreX - size / 2, figure.centreY - size / 2, size, size,
+                            figure.fallback);
         }
     }
 #endif
@@ -652,6 +692,11 @@ bool World::onPlayerStep() {
     }
     m_encounterCooldown = ENCOUNTER_COOLDOWN_STEPS;
     return true;
+}
+
+void World::startEncounterWith(std::vector<std::unique_ptr<Enemy>> enemies) {
+    m_activeEncounter = std::move(enemies);
+    m_activeEncounterTag.clear();
 }
 
 void World::endEncounter() {

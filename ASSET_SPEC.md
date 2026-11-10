@@ -17,9 +17,9 @@ they read clearly against the ground without dwarfing it.
 | Category | Directory | Size | Alpha | Source |
 |---|---|---|---|---|
 | Tiles | *(none — generated)* | 32x32 | opaque, except hologram | `TileTextureGen.cpp` |
-| Party members | `assets/characters/` | 48x64 | required, hard cutout | authored / generated |
-| Enemies | `assets/enemies/` | 48x64 – 96x96 | required, hard cutout | authored / generated |
-| NPCs | `assets/npcs/` | 48x64 | required, hard cutout | authored / generated |
+| Party members | `assets/characters/` | 96x128 | required, hard cutout | authored / generated |
+| Enemies | `assets/enemies/` | 96x96 – 192x192 | required, hard cutout | authored / generated |
+| NPCs | `assets/npcs/` | 96x128 | required, hard cutout | authored / generated |
 | Item icons | `assets/items/` | 32x32 | required | authored |
 | Spell icons | `assets/spells/` | 32x32 | required | authored |
 | Equipment icons | `assets/equipment/` | 32x32 | required | authored |
@@ -91,7 +91,7 @@ remove background -> trim to subject -> scale -> harden alpha -> snap palette ->
 python3 tools/spriteprep.py raw/*.png --category characters --outdir assets/characters
 
 # A boss at full size
-python3 tools/spriteprep.py raw/boss.png --category enemies --size 96x96
+python3 tools/spriteprep.py Raw/corporate_enforcer.png --category enemies --size 144x192 --no-palette
 
 # Busy background that flood-fill cannot handle
 python3 tools/spriteprep.py raw/npc.png --category npcs --rembg
@@ -114,7 +114,12 @@ tile, so feet must land at a predictable offset.
 `snap_to_palette()` maps every opaque pixel to the nearest of 16 colours shared
 with the procedural tiles (defined in `tools/asset_spec.py`). This is what makes
 independently produced sprites look like one game rather than sixteen separate
-commissions. Skip it with `--no-palette` only when the source is already on-palette.
+commissions. Skip it with `--no-palette` when the source is already on-palette.
+
+**Characters, enemies and NPCs are always conformed with `--no-palette`** (decided
+2026-11-10). The 16 colours have no skin tones or hair colours, and snapping the
+generated character art to them turned faces and hair grey. The palette still
+applies to tiles and UI.
 
 ## 6. Validation
 

@@ -125,8 +125,9 @@ void CharacterSelectionSystem::render(VulkanRenderer* renderer) {
     }
     
     // Character card layout - 3 characters horizontally centered
-    const int cardW = 300;
-    const int cardH = 400;
+    // Exactly 3x the 96x128 character sprites, so the pixels stay square.
+    const int cardW = 288;
+    const int cardH = 384;
     const int cardSpacing = 100;
     const int totalWidth = (cardW * 3) + (cardSpacing * 2);
     const int startX = (screenW - totalWidth) / 2;

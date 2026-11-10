@@ -12,6 +12,7 @@ class VulkanRenderer;
 class EncounterTable;
 class NPC;
 
+class SpriteLibrary;
 class World {
 public:
     enum class BiomeType {
@@ -34,7 +35,7 @@ public:
     bool initialize();
     void loadMapTextures(VulkanRenderer* renderer);
     void update(float deltaTime);
-    void render(VulkanRenderer* renderer);
+    void render(VulkanRenderer* renderer, SpriteLibrary* sprites = nullptr);
     void spawnEnemies();
 
     // Map management
@@ -67,6 +68,9 @@ public:
     // Enemies participating in the battle that just started.
     const std::vector<std::unique_ptr<Enemy>>& getActiveEncounter() const { return m_activeEncounter; }
     bool hasActiveEncounter() const { return !m_activeEncounter.empty(); }
+    // Start a fight against exactly these enemies. For development shortcuts
+    // and tests; normal play goes through checkEnemyEncounter.
+    void startEncounterWith(std::vector<std::unique_ptr<Enemy>> enemies);
     // Release the battle group. Call when the battle ends, however it ended.
     void endEncounter();
 

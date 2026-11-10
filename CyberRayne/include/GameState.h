@@ -28,6 +28,8 @@ class PauseMenu;
 class SettingsMenu;
 struct BattleSummary;
 
+class SpriteLibrary;
+class BattleScene;
 class GameState {
 public:
     enum class State {
@@ -121,10 +123,16 @@ private:
     // Party levels when the current battle began, to report level-ups after.
     std::vector<int> m_levelsBeforeBattle;
     std::unique_ptr<BattleSummary> m_battleSummary;
+    // Character, enemy and NPC art, loaded on first use. Null until a
+    // renderer is set.
+    std::unique_ptr<SpriteLibrary> m_sprites;
+    std::unique_ptr<BattleScene> m_battleScene;
     // Set by CYBERRAYNE_START=world; consumed on the first update().
     bool m_pendingDevStart = false;
     // Set by CYBERRAYNE_START=load; consumed on the first update().
     bool m_pendingDevLoad = false;
+    // Set by CYBERRAYNE_START=battle; consumed on the first update().
+    bool m_pendingDevBattle = false;
     std::unique_ptr<World> m_world;
     std::unique_ptr<Party> m_party;
     std::unique_ptr<CharacterSelectionSystem> m_charSelectionSystem;

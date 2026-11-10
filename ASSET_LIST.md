@@ -10,6 +10,25 @@ replacement. A file existing on disk is not progress toward shipping.
 
 The exception is **tiles**, which are now generated in code and are done (section 1).
 
+### Raw sprite pass — 2026-11-10
+
+The user supplied a 17-sprite slice brief. All 17 source images and their generation
+prompts are now in [`CyberRayne/Raw/`](CyberRayne/Raw/MANIFEST.md), using the exact
+requested filenames. Rayne's Solo carries a heavy pistol, Netrunner has a forearm
+cyberdeck, and Infiltrator carries twin blades. Companions are `cyph.png` and
+`vash.png`; the crystalline enemy is `black_ice.png`; Corporate Enforcer is the
+boss. All seven map NPCs are included.
+
+**Update, same day:** all 17 base sprites are conformed (96x128, original colours,
+see ASSET_SPEC.md) and in the game under `assets/characters`, `assets/enemies` and
+`assets/npcs`. Walk and battle animation sheets are still being generated in
+`CyberRayne/Raw/sheets/` and are not in the game yet.
+
+The paragraph below describes the raw sources.
+These are raw design drafts, not FINAL runtime assets. The linked manifest takes
+precedence over older naming/subject proposals below for this sprite batch.
+Runtime entries remain TEMP/MISSING until the sources are conformed and integrated.
+
 | Status | Meaning |
 |--------|---------|
 | **[TEMP]** | A file exists in `assets/`, but it is placeholder and will be replaced. |
@@ -442,7 +461,7 @@ Roughly 25 assets stand between here and a coherent-looking slice:
 1. ~~Tile textures~~ — **done, procedural**
 2. **Player sprites** (3) — `netrunner.png`, `solo.png`, `infiltrator.png`.
    Files exist in `assets/characters/` but are 2048x2048 with no alpha; they need
-   a `spriteprep.py` pass to reach the 48x64 RGBA spec.
+   a `spriteprep.py` pass to reach the 96x128 RGBA spec.
 3. **Enemy sprites** (5) — one per cyberpunk enemy type
 4. **NPC sprites** (7) — one per defined NPC
 5. **Battle backgrounds** (3) — one per district

@@ -1,4 +1,5 @@
 #define STB_IMAGE_IMPLEMENTATION
+#include <cmath>
 #include <array>
 #include <iostream>
 #include <stdexcept>
@@ -87,6 +88,14 @@ std::string findShadersDirectory() {
 }
 
 // Convenience: pixel-based rendering helper. Positions use top-left pixel origin.
+namespace {
+float srgbToLinear(float c) {
+    if (c <= 0.0f) return 0.0f;
+    if (c >= 1.0f) return 1.0f;
+    return c <= 0.04045f ? c / 12.92f : std::pow((c + 0.055f) / 1.055f, 2.4f);
+}
+}  // namespace
+
 void VulkanRenderer::renderSpritePixelsWithTexture(int leftPx, int topPx, int widthPx, int heightPx, int textureIndex,
                                                    float r, float g, float b, float a,
                                                    float u0, float v0, float u1, float v1) {
@@ -1162,9 +1171,13 @@ void VulkanRenderer::renderSpriteWithTexture(float x, float y, float width, floa
         transform.y = y;
         transform.width = width;
         transform.height = height;
-        transform.r = r;
-        transform.g = g;
-        transform.b = b;
+        // Callers give colours as they should look on screen (sRGB). The
+        // swapchain is an sRGB format, so the shader works in linear light
+        // and the display step brightens the result; without this conversion
+        // every tint and UI colour comes out washed out.
+        transform.r = srgbToLinear(r);
+        transform.g = srgbToLinear(g);
+        transform.b = srgbToLinear(b);
         transform.a = a;
         transform.u0 = u0;
         transform.v0 = v0;
@@ -1193,9 +1206,13 @@ void VulkanRenderer::renderSprite(float x, float y, float width, float height, f
         transform.y = y;
         transform.width = width;
         transform.height = height;
-        transform.r = r;
-        transform.g = g;
-        transform.b = b;
+        // Callers give colours as they should look on screen (sRGB). The
+        // swapchain is an sRGB format, so the shader works in linear light
+        // and the display step brightens the result; without this conversion
+        // every tint and UI colour comes out washed out.
+        transform.r = srgbToLinear(r);
+        transform.g = srgbToLinear(g);
+        transform.b = srgbToLinear(b);
         transform.a = a;
         transform.u0 = u0;
         transform.v0 = v0;
@@ -1208,6 +1225,15 @@ void VulkanRenderer::renderSprite(float x, float y, float width, float height, f
     } else {
         std::cerr << "Warning: Maximum number of sprites per frame exceeded!" << std::endl;
     }
+}
+
+bool VulkanRenderer::getTextureSize(int textureIndex, int& width, int& height) const {
+    if (textureIndex < 0 || textureIndex >= static_cast<int>(m_textures.size())) {
+        return false;
+    }
+    width = m_textures[static_cast<size_t>(textureIndex)].width;
+    height = m_textures[static_cast<size_t>(textureIndex)].height;
+    return true;
 }
 
 void VulkanRenderer::setCurrentTexture(int textureIndex) {
