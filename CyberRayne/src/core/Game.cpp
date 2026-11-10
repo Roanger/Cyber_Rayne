@@ -1,3 +1,5 @@
+#include <string>
+#include "../../include/InputPrompts.h"
 #include "../../include/Game.h"
 #include "../../include/GameState.h"
 #include "../../include/VulkanRenderer.h"
@@ -26,11 +28,18 @@ namespace {
 // GLFW describes every pad it recognises in Xbox terms, so one mapping covers
 // PlayStation (Cross = A, Circle = B, Triangle = Y, Options = Start), Xbox,
 // and anything Steam Input presents as an Xbox pad.
-void pollGamepads([[maybe_unused]] InputState::Held& held) {
+// Returns true if a controller was being used this frame, and says in
+// padName which one.
+bool pollGamepads([[maybe_unused]] InputState::Held& held, [[maybe_unused]] std::string& padName) {
+    bool used = false;
 #ifndef _WIN32
     // How far the stick must be pushed to count as a direction.
     constexpr float STICK_THRESHOLD = 0.5f;
-    auto hold = [&](InputAction action) { held[InputState::indexOf(action)] = true; };
+    bool touched = false;
+    auto hold = [&](InputAction action) {
+        held[InputState::indexOf(action)] = true;
+        touched = true;
+    };
 
     for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
         GLFWgamepadstate pad;
@@ -57,8 +66,15 @@ void pollGamepads([[maybe_unused]] InputState::Held& held) {
         if (pad.buttons[GLFW_GAMEPAD_BUTTON_Y] || pad.buttons[GLFW_GAMEPAD_BUTTON_START]) {
             hold(InputAction::OPEN_MENU);
         }
+        if (touched && !used) {
+            used = true;
+            const char* name = glfwGetGamepadName(jid);
+            padName = name ? name : "";
+        }
+        touched = false;
     }
 #endif
+    return used;
 }
 
 // GLFW ships button layouts for common pads. An unusual one can be taught to
@@ -159,6 +175,15 @@ void Game::run() {
     loadExtraGamepadMappings();
     logGamepads();
 #ifndef _WIN32
+    // With a controller plugged in at start, show its buttons from the first
+    // screen rather than waiting for it to be touched.
+    for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
+        if (glfwJoystickIsGamepad(jid)) {
+            const char* name = glfwGetGamepadName(jid);
+            InputPrompts::setDevice(InputPrompts::deviceForGamepadName(name ? name : ""));
+            break;
+        }
+    }
     // Also announce pads plugged in or pulled out while playing.
     glfwSetJoystickCallback([](int jid, int event) {
         if (event == GLFW_CONNECTED) {
@@ -212,7 +237,19 @@ void Game::run() {
                     }
                 }
             }
-            pollGamepads(held);
+            // On-screen hints name the controls of whatever was touched
+            // last, so they swap by themselves between keyboard and pad.
+            InputPrompts::setBindings(m_gameState->getInputConfig());
+            bool keyboardUsed = false;
+            for (int key = kFirstKey; key <= kLastKey && !keyboardUsed; ++key) {
+                keyboardUsed = justPressed(key);
+            }
+            std::string padName;
+            if (pollGamepads(held, padName)) {
+                InputPrompts::setDevice(InputPrompts::deviceForGamepadName(padName));
+            } else if (keyboardUsed) {
+                InputPrompts::setDevice(InputPrompts::Device::KEYBOARD);
+            }
 
             static InputState inputState;
             const std::vector<InputAction> fired = inputState.update(deltaTime, held);
@@ -290,6 +327,9 @@ void Game::run() {
         }
     }
     
+    // The bindings belong to the game state, which may go away now.
+    InputPrompts::setBindings(nullptr);
+
     std::cout << "Game loop ended." << std::endl;
 }
 

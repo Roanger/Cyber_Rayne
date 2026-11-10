@@ -1,3 +1,4 @@
+#include "../../include/InputPrompts.h"
 #include "../../include/ui/SettingsMenu.h"
 #include "../../include/InputConfig.h"
 
@@ -49,7 +50,7 @@ SettingsMenu::Command SettingsMenu::handleInput(InputAction action, InputConfig&
         case InputAction::CONFIRM:
             if (m_index < actionCount()) {
                 m_capturing = true;
-                m_status = "Press the new key. Esc cancels.";
+                m_status = "Press the new key. " + InputPrompts::cancel() + " cancels.";
             } else if (m_index == actionCount()) {
                 config.resetToDefaults();
                 m_changed = true;
@@ -142,6 +143,9 @@ void SettingsMenu::render(VulkanRenderer* renderer, TextRenderer* text, const In
     if (!m_status.empty()) {
         text->renderText(renderer, m_status, x, y0 + h + 20, small, m_capturing ? Theme::LOVE : Theme::FOAM);
     }
-    text->renderText(renderer, "Up/Down: select   Enter: change   Esc: back", x, y0 + h + 52, small, Theme::MUTED);
+    text->renderText(renderer,
+                     InputPrompts::upDown() + ": select   " + InputPrompts::confirm() + ": change   " +
+                         InputPrompts::cancel() + ": back",
+                     x, y0 + h + 52, small, Theme::MUTED);
 }
 #endif

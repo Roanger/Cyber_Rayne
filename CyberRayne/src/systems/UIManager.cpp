@@ -1,3 +1,4 @@
+#include "../../include/InputPrompts.h"
 #include "../../include/UIManager.h"
 #include "../../include/VulkanRenderer.h"
 #include "../../include/Party.h"
@@ -321,7 +322,7 @@ void UIManager::renderCommandPanel(VulkanRenderer* renderer, int x, int y, int w
         return;
     }
     if (m_entries.empty()) {
-        text->renderText(renderer, "Nothing here. Esc to go back.", x + pad, y + pad + 44, 2, Theme::MUTED);
+        text->renderText(renderer, "Nothing here. " + InputPrompts::cancel() + " to go back.", x + pad, y + pad + 44, 2, Theme::MUTED);
         return;
     }
 

@@ -1,59 +1,50 @@
 # Cyber Rayne — Master Asset List
 
-This document tracks **which** assets are needed and their status.
-**ASSET_SPEC.md** defines **what** each one must be — dimensions, format, and the
-tooling that produces and validates them. Read the spec before authoring anything.
+Tracks generated sources, runtime assets, and remaining art. Updated 2026-11-10
+against the repository, asset validator, item catalog, and ability registry.
+[ASSET_SPEC.md](ASSET_SPEC.md) defines runtime dimensions and preparation rules.
 
-**No hand-authored asset in `assets/` is final.** Every image file present today is
-temporary — programmer art or leftover fantasy-era asset — and is slated for
-replacement. A file existing on disk is not progress toward shipping.
+**Completed:** 17 approved base sprites and 22 animation sheets are generated,
+conformed, and integrated. Their originals and exact prompts are in
+[CyberRayne/Raw/](CyberRayne/Raw/MANIFEST.md) and
+[Raw/sheets/](CyberRayne/Raw/sheets/README.md). All **40 runtime image files** pass
+`python3 CyberRayne/tools/validate_assets.py` (39 character/sheet assets + font).
+Animation timing, facing and visual polish still need manual playtesting.
 
-The exception is **tiles**, which are now generated in code and are done (section 1).
-
-### Raw sprite pass — 2026-11-10
-
-The user supplied a 17-sprite slice brief. All 17 source images and their generation
-prompts are now in [`CyberRayne/Raw/`](CyberRayne/Raw/MANIFEST.md), using the exact
-requested filenames. Rayne's Solo carries a heavy pistol, Netrunner has a forearm
-cyberdeck, and Infiltrator carries twin blades. Companions are `cyph.png` and
-`vash.png`; the crystalline enemy is `black_ice.png`; Corporate Enforcer is the
-boss. All seven map NPCs are included.
-
-**Update, same day:** all 17 base sprites are conformed (96x128, original colours,
-see ASSET_SPEC.md) and in the game under `assets/characters`, `assets/enemies` and
-`assets/npcs`. Walk and battle animation sheets are still being generated in
-`CyberRayne/Raw/sheets/` and are not in the game yet.
-
-The paragraph below describes the raw sources.
-These are raw design drafts, not FINAL runtime assets. The linked manifest takes
-precedence over older naming/subject proposals below for this sprite batch.
-Runtime entries remain TEMP/MISSING until the sources are conformed and integrated.
-
-The follow-up [animation source batch](CyberRayne/Raw/sheets/README.md) contains
-22 generated sheets: five party walking sheets, ten party/enemy battle sheets,
-and seven NPC idle/talking sheets. Exact prompts and measured PNG checks are
-included. The raw sources stay untouched; `tools/sheetprep.py` built the
-game-ready sheets in `assets/` from them (2026-11-10), and all 22 are in use.
+**New raw art:** 9 item/story and equipment icons are saved with exact prompts.
+See the [icon manifest](CyberRayne/Raw/ICON_MANIFEST.md). These originals still
+need conversion to 32x32 and runtime integration.
 
 | Status | Meaning |
-|--------|---------|
-| **[TEMP]** | A file exists in `assets/`, but it is placeholder and will be replaced. |
-| **[MISSING]** | No file at all. Code either falls back or renders nothing. |
-| **[CUT]** | Deliberately removed from scope — do not author. |
-| **[DEFERRED]** | Real scope, but not a blocker. Revisit when a map or system needs it. |
-| **[FINAL]** | Shippable art, locked. |
+| --- | --- |
+| **[IN GAME]** | Runtime file exists, is used by the game, and passed the asset validator. |
+| **[RAW]** | Generated original exists in `CyberRayne/Raw/`; conversion/integration remains. |
+| **[MISSING]** | Planned art has no generated source or runtime file yet. |
+| **[COVERED]** | Existing code or another asset supplies the visual; no separate image required. |
+| **[DEFERRED]** | Optional enhancement or full-game wishlist; not a slice blocker. |
+| **[CUT]** | Deliberately removed or superseded; do not generate. |
+| **[FINAL]** | Explicitly locked for shipping after visual review. |
 
-Only **[FINAL]** and procedural sections count as done.
+IN GAME is not a claim that animation polish or a final manual playthrough is done.
+Raw generation is tracked separately so finished art is not requested twice.
 
-### Before committing any asset
+### Asset workflow
+
+Keep original generated files and exact prompts in `CyberRayne/Raw/`. Write
+conformed copies into the appropriate `CyberRayne/assets/` category. Preserve the
+approved originals and earlier versions.
+
+Run from `CyberRayne/`:
 
 ```bash
-python3 tools/spriteprep.py <source> --category <dir>   # conform to spec
-python3 tools/validate_assets.py                        # must exit 0
+python3 tools/spriteprep.py Raw/<name>.png --category characters --no-palette --outdir assets/characters
+python3 tools/sheetprep.py Raw/sheets/<name>_walk.png
+python3 tools/validate_assets.py
 ```
 
-The validator exists because the first art pass shipped 2048x2048 JPEGs renamed to
-`.png` with no alpha channel, which the renderer drew as opaque rectangles.
+Characters/NPCs are now **96x128**, with original colours retained. Enemies range
+from 96x96 to 192x192. Icons remain 32x32; see the spec for other categories.
+Do not run the single-sprite converter on an animation sheet.
 
 ---
 
@@ -83,112 +74,120 @@ function each, not one commission each.
 
 ---
 
-## 2. Player Character Sprites (`assets/characters/`)
+## 2. Party Sprites (`assets/characters/`)
 
-> **Naming is code-derived, not free-form.** `CharacterSelectionSystem.cpp:53-56` builds
-> the path as `assets/characters/<classToString() lowercased>.png`. The classes are
-> `NETRUNNER`, `SOLO`, `INFILTRATOR` (`Player.h:21-24`). Any filename not matching that
-> lowercased string will not load. The old `warrior` / `mage` / `rogue` names are dead.
+Rayne uses the class names `netrunner`, `solo`, and `infiltrator`. Companions use
+their own names, `cyph` and `vash`; this naming decision is resolved.
 
 | Asset | Status | Notes |
-|-------|--------|-------|
-| netrunner.png | [TEMP] | Tech caster class — loaded by class selection |
-| solo.png | [TEMP] | Physical frontline class |
-| infiltrator.png | [TEMP] | Speed/attrition class |
+| --- | --- | --- |
+| netrunner.png | [IN GAME] | Rayne: hooded coat and forearm cyberdeck |
+| solo.png | [IN GAME] | Rayne: armored jacket and heavy pistol |
+| infiltrator.png | [IN GAME] | Rayne: sleek suit and twin blades |
+| cyph.png | [IN GAME] | Distinct lanky hacker companion: visor and cyan cables |
+| vash.png | [IN GAME] | Distinct wiry rogue companion: face scarf and knives |
 
-### Needed for full character system
-Rayne's sprite is whichever class the player picked, so there are no `rayne_*` class
-variants — the three files above cover it. Directional and battle art is per-class.
+### Party animation sheets
 
 | Asset | Status | Notes |
-|-------|--------|-------|
-| netrunner_side.png | [MISSING] | Side view for horizontal movement |
-| netrunner_back.png | [MISSING] | Back view for upward movement |
-| netrunner_walk.png | [MISSING] | Walk spritesheet (4-8 frames) |
-| solo_side.png | [MISSING] | |
-| solo_back.png | [MISSING] | |
-| solo_walk.png | [MISSING] | |
-| infiltrator_side.png | [MISSING] | |
-| infiltrator_back.png | [MISSING] | |
-| infiltrator_walk.png | [MISSING] | |
-| netrunner_battle.png | [MISSING] | Battle stance |
-| solo_battle.png | [MISSING] | Battle stance |
-| infiltrator_battle.png | [MISSING] | Battle stance |
-| ~~rayne_hurt.png~~ | [CUT] | Damage reaction = white-flash tint uniform, not an asset |
-| ~~rayne_down.png~~ | [CUT] | Defeat = alpha dissolve / squash in shader, not an asset |
+| --- | --- | --- |
+| netrunner_walk.png | [IN GAME] | 4x4: down, left, right, up; four frames per direction |
+| netrunner_battle.png | [IN GAME] | 4x4: idle, attack, ability, guard |
+| solo_walk.png | [IN GAME] | 4x4: down, left, right, up; four frames per direction |
+| solo_battle.png | [IN GAME] | 4x4: idle, attack, ability, guard |
+| infiltrator_walk.png | [IN GAME] | 4x4: down, left, right, up; four frames per direction |
+| infiltrator_battle.png | [IN GAME] | 4x4: idle, attack, ability, guard |
+| cyph_walk.png | [IN GAME] | 4x4: down, left, right, up; four frames per direction |
+| cyph_battle.png | [IN GAME] | 4x4: idle, attack, ability, guard |
+| vash_walk.png | [IN GAME] | 4x4: down, left, right, up; four frames per direction |
+| vash_battle.png | [IN GAME] | 4x4: idle, attack, ability, guard |
 
-**Open question:** companions Cyph and Vash were previously distinct sprites
-(`cyph_mage.png`, `vash_rogue.png`). Under class-derived naming they collide with the
-player's class sprite. Either give companions their own `assets/characters/npc_cyph.png`
-namespace, or accept that a party of three shows repeated art.
+Side/back views are included in the walking sheets. Separate `<class>_side.png`
+and `<class>_back.png` files are **[COVERED]** and do not need generating.
+Hurt flashes and defeat effects remain **[CUT]** as standalone art; `BattleFx`
+supplies runtime effects.
 
 ---
 
 ## 3. Enemy Sprites (`assets/enemies/`)
 
 | Asset | Status | Notes |
-|-------|--------|-------|
-| street_thug.png | [MISSING] | Basic enemy — Neo-Kyoto Central, Neon Alley |
-| security_drone.png | [MISSING] | Flying drone enemy — all districts |
-| enemy_netrunner.png | [MISSING] | Hacker enemy — Neon Alley. **Renamed:** plain `netrunner.png` collides with the player class sprite. Keep enemies namespaced. |
-| combat_cyborg.png | [MISSING] | Heavy enemy — Neon Alley, Corporate Plaza |
-| corporate_enforcer.png | [MISSING] | Elite enemy — Corporate Plaza |
-| goblin.png | [CUT] | Fantasy-era leftover, deleted 2026-11-10 |
+| --- | --- | --- |
+| street_thug.png | [IN GAME] | Mohawk, vest and pipe |
+| street_thug_battle.png | [IN GAME] | 4x4: idle, attack, ability, guard |
+| security_drone.png | [IN GAME] | Round hover drone, red eye and taser prongs |
+| security_drone_battle.png | [IN GAME] | 4x4: idle, attack, ability, guard |
+| black_ice.png | [IN GAME] | Purple/magenta crystalline digital entity |
+| black_ice_battle.png | [IN GAME] | 4x4: idle, attack, ability, guard |
+| combat_cyborg.png | [IN GAME] | Bulky metal limbs and orange optics |
+| combat_cyborg_battle.png | [IN GAME] | 4x4: idle, attack, ability, guard |
+| corporate_enforcer.png | [IN GAME] | Slice boss: riot armor, shield and shock baton |
+| corporate_enforcer_battle.png | [IN GAME] | 4x4: idle, attack, ability, guard |
+
+`black_ice.png` and `black_ice_battle.png` supersede the old enemy Netrunner
+filenames. Corporate Enforcer is the slice boss; no additional boss is needed for
+this story chain. Enemy map sprites currently use their standing images.
 
 ### Additional enemies for full game
+
 | Asset | Status | Notes |
-|-------|--------|-------|
-| street_thug_battle.png | [MISSING] | Battle stance |
-| security_drone_battle.png | [MISSING] | Battle stance |
-| netrunner_battle.png | [MISSING] | Battle stance |
-| combat_cyborg_battle.png | [MISSING] | Battle stance |
-| corporate_enforcer_battle.png | [MISSING] | Battle stance |
-| corporate_soldier.png | [MISSING] | Mid-tier corporate guard |
-| riot_bot.png | [MISSING] | Riot control robot |
-| spider_bot.png | [MISSING] | Small crawling bot |
-| turret.png | [MISSING] | Stationary turret |
-| boss_data_king.png | [MISSING] | Act 1 boss — data broker kingpin |
-| boss_corp_ceo.png | [MISSING] | Act 2 boss — corporate CEO |
-| boss_ai_core.png | [MISSING] | Act 3 boss — rogue AI |
-| ~~enemy_hurt.png~~ | [CUT] | Damage flash = tint uniform, not an asset |
-| ~~enemy_defeated.png~~ | [CUT] | Defeat = shader dissolve, not an asset |
+| --- | --- | --- |
+| corporate_soldier.png | [DEFERRED] | Mid-tier corporate guard |
+| riot_bot.png | [DEFERRED] | Riot control robot |
+| spider_bot.png | [DEFERRED] | Small crawling bot |
+| turret.png | [DEFERRED] | Stationary turret |
+| boss_data_king.png | [DEFERRED] | Future data broker kingpin |
+| boss_corp_ceo.png | [DEFERRED] | Future corporate CEO boss |
+| boss_ai_core.png | [DEFERRED] | Future rogue AI boss |
+| goblin.png | [CUT] | Removed fantasy-era art |
+| enemy_hurt.png | [CUT] | Runtime hit flash |
+| enemy_defeated.png | [CUT] | Runtime defeat fade |
 
 ---
 
 ## 4. NPC Sprites (`assets/npcs/`)
 
+All seven map NPCs have distinct approved designs.
+
 | Asset | Status | Notes |
-|-------|--------|-------|
-| fixer_kaga.png | [MISSING] | Neo-Kyoto Central — quest giver |
-| street_vendor.png | [MISSING] | Neo-Kyoto Central — shop |
-| info_broker.png | [MISSING] | Neo-Kyoto Central — quest giver |
-| smuggler_ryo.png | [MISSING] | Neon Alley — quest giver |
-| hacker_zero.png | [MISSING] | Neon Alley — quest giver |
-| exec_tanaka.png | [MISSING] | Corporate Plaza — quest giver |
-| security_chief.png | [MISSING] | Corporate Plaza — guard NPC |
+| --- | --- | --- |
+| fixer_kaga.png | [IN GAME] | Quest giver; long coat and cigarette |
+| fixer_kaga_idle_talk.png | [IN GAME] | 4x2: idle, talk |
+| street_vendor.png | [IN GAME] | Recovery service; apron, noodle bowl and ladle |
+| street_vendor_idle_talk.png | [IN GAME] | 4x2: idle, talk |
+| info_broker.png | [IN GAME] | Story NPC; mirrored glasses and data tablet |
+| info_broker_idle_talk.png | [IN GAME] | 4x2: idle, talk |
+| smuggler_ryo.png | [IN GAME] | Neon Alley; large backpack |
+| smuggler_ryo_idle_talk.png | [IN GAME] | 4x2: idle, talk |
+| hacker_zero.png | [IN GAME] | Neon Alley; teenage hacker, headset and hoodie |
+| hacker_zero_idle_talk.png | [IN GAME] | 4x2: idle, talk |
+| exec_tanaka.png | [IN GAME] | Corporate Plaza; sharp suit and cold expression |
+| exec_tanaka_idle_talk.png | [IN GAME] | 4x2: idle, talk |
+| security_chief.png | [IN GAME] | Corporate Plaza; uniform, cap and holstered sidearm |
+| security_chief_idle_talk.png | [IN GAME] | 4x2: idle, talk |
 
 ### Additional NPCs for full game
 | Asset | Status | Notes |
 |-------|--------|-------|
-| bartender.png | [MISSING] | Bar/social hub |
-| medic.png | [MISSING] | Healing station |
-| black_market_dealer.png | [MISSING] | Underground shop |
-| street_kid.png | [MISSING] | Ambient NPC — flavor text |
-| corporate_worker.png | [MISSING] | Ambient NPC — Corporate Plaza |
-| homeless_npc.png | [MISSING] | Ambient NPC — Neon Alley |
-| traffic_drone.png | [MISSING] | Ambient NPC — flying traffic |
-| shopkeeper_general.png | [MISSING] | General store |
-| weapon_dealer.png | [MISSING] | Weapon shop |
-| armor_dealer.png | [MISSING] | Armor shop |
-| item_dealer.png | [MISSING] | Consumable shop |
-| netrunner_vendor.png | [MISSING] | Sells hacking programs |
-| taxi_driver.png | [MISSING] | Fast travel |
-| subway_attendant.png | [MISSING] | Fast travel |
-| gang_leader.png | [MISSING] | Faction quest giver |
-| corporate_executive.png | [MISSING] | Corporate Plaza quest giver |
-| police_officer.png | [MISSING] | Law enforcement NPC |
-| prostitute.png | [MISSING] | Neon Alley ambient |
-| drug_dealer.png | [MISSING] | Neon Alley ambient |
+| bartender.png | [DEFERRED] | Bar/social hub |
+| medic.png | [DEFERRED] | Healing station |
+| black_market_dealer.png | [DEFERRED] | Underground shop |
+| street_kid.png | [DEFERRED] | Ambient NPC — flavor text |
+| corporate_worker.png | [DEFERRED] | Ambient NPC — Corporate Plaza |
+| homeless_npc.png | [DEFERRED] | Ambient NPC — Neon Alley |
+| traffic_drone.png | [DEFERRED] | Ambient NPC — flying traffic |
+| shopkeeper_general.png | [DEFERRED] | General store |
+| weapon_dealer.png | [DEFERRED] | Weapon shop |
+| armor_dealer.png | [DEFERRED] | Armor shop |
+| item_dealer.png | [DEFERRED] | Consumable shop |
+| netrunner_vendor.png | [DEFERRED] | Sells hacking programs |
+| taxi_driver.png | [DEFERRED] | Fast travel |
+| subway_attendant.png | [DEFERRED] | Fast travel |
+| gang_leader.png | [DEFERRED] | Faction quest giver |
+| corporate_executive.png | [DEFERRED] | Corporate Plaza quest giver |
+| police_officer.png | [DEFERRED] | Law enforcement NPC |
+| prostitute.png | [DEFERRED] | Neon Alley ambient |
+| drug_dealer.png | [DEFERRED] | Neon Alley ambient |
 
 ---
 
@@ -196,23 +195,23 @@ namespace, or accept that a party of three shows repeated art.
 
 | Asset | Status | Notes |
 |-------|--------|-------|
-| hover_car.png | [MISSING] | Flying car — ambient traffic |
-| hover_car_2.png | [MISSING] | Variant |
-| hover_car_3.png | [MISSING] | Variant |
-| police_hover.png | [MISSING] | Police flying vehicle |
-| ambulance_hover.png | [MISSING] | Emergency vehicle |
-| delivery_drone.png | [MISSING] | Package delivery drone |
-| subway_train.png | [MISSING] | Subway train — background |
-| motorcycle.png | [MISSING] | Street motorcycle |
-| motorcycle_electric.png | [MISSING] | Electric bike variant |
-| van.png | [MISSING] | Delivery van |
-| armored_truck.png | [MISSING] | Corporate transport |
-| taxi_hover.png | [MISSING] | Flying taxi — fast travel |
-| garbage_truck.png | [MISSING] | Ambient |
-| fire_drone.png | [MISSING] | Emergency response drone |
-| news_drone.png | [MISSING] | Media drone — ambient |
-| construction_mech.png | [MISSING] | Construction mech — ambient |
-| billboard_car.png | [MISSING] | Mobile ad vehicle |
+| hover_car.png | [DEFERRED] | Flying car — ambient traffic |
+| hover_car_2.png | [DEFERRED] | Variant |
+| hover_car_3.png | [DEFERRED] | Variant |
+| police_hover.png | [DEFERRED] | Police flying vehicle |
+| ambulance_hover.png | [DEFERRED] | Emergency vehicle |
+| delivery_drone.png | [DEFERRED] | Package delivery drone |
+| subway_train.png | [DEFERRED] | Subway train — background |
+| motorcycle.png | [DEFERRED] | Street motorcycle |
+| motorcycle_electric.png | [DEFERRED] | Electric bike variant |
+| van.png | [DEFERRED] | Delivery van |
+| armored_truck.png | [DEFERRED] | Corporate transport |
+| taxi_hover.png | [DEFERRED] | Flying taxi — fast travel |
+| garbage_truck.png | [DEFERRED] | Ambient |
+| fire_drone.png | [DEFERRED] | Emergency response drone |
+| news_drone.png | [DEFERRED] | Media drone — ambient |
+| construction_mech.png | [DEFERRED] | Construction mech — ambient |
+| billboard_car.png | [DEFERRED] | Mobile ad vehicle |
 
 ---
 
@@ -220,139 +219,191 @@ namespace, or accept that a party of three shows repeated art.
 
 | Asset | Status | Notes |
 |-------|--------|-------|
-| menu_background.png | [TEMP] | Main menu background |
+| menu_background.png | [CUT] | Main menu background. Title and character select are drawn from code now; file deleted 2026-11-10 |
 | start.png | [CUT] | Start button. Menu buttons are text `UIButton` widgets now; file deleted 2026-11-10 |
 | loadgame.png | [CUT] | Load game button. Menu buttons are text `UIButton` widgets now; file deleted 2026-11-10 |
 | settings.png | [CUT] | Settings button. Menu buttons are text `UIButton` widgets now; file deleted 2026-11-10 |
 | quit.png | [CUT] | Quit button. Menu buttons are text `UIButton` widgets now; file deleted 2026-11-10 |
-| cursor.png | [TEMP] | Menu cursor |
-| namebanner.png | [TEMP] | Game title banner |
+| cursor.png | [CUT] | Menu cursor. Title and character select are drawn from code now; file deleted 2026-11-10 |
+| namebanner.png | [CUT] | Game title banner. Title and character select are drawn from code now; file deleted 2026-11-10 |
 
-### Additional UI assets needed
+### Optional UI art and background replacements
+
+The current menus, overlays and per-district battle backdrops are drawn from
+code. Background artwork, if commissioned, belongs in `assets/backgrounds/`.
 | Asset | Status | Notes |
 |-------|--------|-------|
-| battle_background.png | [MISSING] | Battle scene background |
-| battle_background_alley.png | [MISSING] | Neon Alley battle bg |
-| battle_background_plaza.png | [MISSING] | Corporate Plaza battle bg |
-| battle_background_central.png | [MISSING] | Neo-Kyoto Central battle bg |
-| dialogue_box.png | [MISSING] | Dialogue text box background |
-| pause_overlay.png | [MISSING] | Pause screen overlay |
-| game_over.png | [MISSING] | Game over screen |
-| victory.png | [MISSING] | Victory screen |
-| bar_fill.png | [MISSING] | **One** 1×N gradient strip, tinted per bar type |
-| ~~hp_bar.png~~ | [CUT] | Use `bar_fill.png` tinted |
-| ~~mp_bar.png~~ | [CUT] | Use `bar_fill.png` tinted |
-| ~~atb_bar.png~~ | [CUT] | Use `bar_fill.png` tinted |
-| ~~xp_bar.png~~ | [CUT] | Use `bar_fill.png` tinted |
-| status_poison.png | [MISSING] | Poison status icon |
-| status_regen.png | [MISSING] | Regen status icon |
-| status_stun.png | [MISSING] | Stun status icon |
-| status_buff.png | [MISSING] | Attack buff icon |
-| status_debuff.png | [MISSING] | Defense debuff icon |
-| minimap.png | [MISSING] | Minimap frame |
+| battle_background.png | [COVERED] | Procedural battle backdrop in BattleScene; no generic image required |
+| battle_background_alley.png | [DEFERRED] | Neon Alley battle bg |
+| battle_background_plaza.png | [DEFERRED] | Corporate Plaza battle bg |
+| battle_background_central.png | [DEFERRED] | Neo-Kyoto Central battle bg |
+| dialogue_box.png | [COVERED] | StoryHud and Theme draw dialogue panels |
+| pause_overlay.png | [COVERED] | PauseMenu and Theme draw the pause overlay |
+| game_over.png | [COVERED] | StoryHud draws the game-over card |
+| victory.png | [COVERED] | StoryHud draws battle results |
+| bar_fill.png | [COVERED] | HP/MP/ATB/XP fills are colored geometry |
+| ~~hp_bar.png~~ | [CUT] | Runtime colored geometry |
+| ~~mp_bar.png~~ | [CUT] | Runtime colored geometry |
+| ~~atb_bar.png~~ | [CUT] | Runtime colored geometry |
+| ~~xp_bar.png~~ | [CUT] | Runtime colored geometry |
+| status_poison.png | [DEFERRED] | Poison status icon |
+| status_regen.png | [DEFERRED] | Regen status icon |
+| status_stun.png | [DEFERRED] | Stun status icon |
+| status_buff.png | [DEFERRED] | Attack buff icon |
+| status_debuff.png | [DEFERRED] | Defense debuff icon |
+| minimap.png | [DEFERRED] | Minimap frame |
 | ~~minimap_player.png~~ | [CUT] | Colored quad, push-constant color |
 | ~~minimap_npc.png~~ | [CUT] | Colored quad |
 | ~~minimap_enemy.png~~ | [CUT] | Colored quad |
 | ~~minimap_transition.png~~ | [CUT] | Colored quad |
-| inventory_bg.png | [MISSING] | Inventory screen background |
-| quest_log_bg.png | [MISSING] | Quest log screen background |
-| shop_bg.png | [MISSING] | Shop screen background |
-| tooltip_bg.png | [MISSING] | Tooltip background |
-| button_small.png | [MISSING] | Small button template |
-| button_large.png | [MISSING] | Large button template |
-| panel_bg.png | [MISSING] | Panel background template |
-| scrollbar.png | [MISSING] | Scrollbar for lists |
-| character_portrait_frame.png | [MISSING] | Frame for character portraits |
-| enemy_info_card.png | [MISSING] | Enemy info display in battle |
-| weather_rain.png | [MISSING] | Rain particle overlay |
+| inventory_bg.png | [COVERED] | PauseMenu draws inventory panels |
+| quest_log_bg.png | [COVERED] | PauseMenu draws quest panels |
+| shop_bg.png | [DEFERRED] | Shop screen background |
+| tooltip_bg.png | [DEFERRED] | Tooltip background |
+| button_small.png | [COVERED] | Buttons are drawn from code |
+| button_large.png | [COVERED] | Buttons are drawn from code |
+| panel_bg.png | [COVERED] | Theme draws panel backgrounds |
+| scrollbar.png | [DEFERRED] | Scrollbar for lists |
+| character_portrait_frame.png | [COVERED] | Character selection draws its frames |
+| enemy_info_card.png | [COVERED] | BattleScene draws enemy information |
+| weather_rain.png | [DEFERRED] | Rain particle overlay |
 | ~~weather_fog.png~~ | [CUT] | Fullscreen shader, not an asset |
 | ~~vignette.png~~ | [CUT] | Fullscreen shader math, not an asset |
 
 ---
 
-## 7. Item & Spell Icons (`assets/items/`, `assets/spells/`)
 
-### Items
+## 7. Item and Ability Icons (`assets/items/`, `assets/spells/`)
+
+Icons are additional presentation art; the current menus use text. Raw generation
+and runtime integration are separate steps. Catalog icons use stable item IDs from
+`Inventory.cpp`; the quest chip and currency are visual/story icons, not bag entries.
+
+### Current slice items and story icons
+
+| Asset | Status | Notes |
+| --- | --- | --- |
+| [stim_pack.png](CyberRayne/Raw/items/stim_pack.png) | [RAW] | Stim Pack: restores 40 HP; medical injector, not a temporary buff |
+| [trauma_kit.png](CyberRayne/Raw/items/trauma_kit.png) | [RAW] | Trauma Kit: restores 120 HP; large field medical kit |
+| [defib_patch.png](CyberRayne/Raw/items/defib_patch.png) | [RAW] | Defib Patch: revives at quarter health; paired electrode patch pack |
+| [data_chip.png](CyberRayne/Raw/items/data_chip.png) | [RAW] | Story data chip from the three-quest chain |
+| [credstick.png](CyberRayne/Raw/items/credstick.png) | [RAW] | Currency icon; gold/credits are not inventory stacks |
+
+### Current party abilities
+
+Proposed image filenames match the IDs in `AbilityRegistry.cpp`. No icon loader is
+wired yet. These names replace the old generic spell list for the current classes.
+
+| Asset | Status | Notes |
+| --- | --- | --- |
+| solo_suppressing_fire.png | [MISSING] | Suppressing Fire: damage to all enemies |
+| solo_guard_protocol.png | [MISSING] | Guard Protocol: ally defense buff |
+| solo_adrenal_surge.png | [MISSING] | Adrenal Surge: self attack buff |
+| solo_executioner.png | [MISSING] | Executioner: heavy single-target strike |
+| net_ice_breaker.png | [MISSING] | Ice Breaker: tech damage to one target |
+| net_patch.png | [MISSING] | Patch: heal an ally |
+| net_system_shock.png | [MISSING] | System Shock: area tech damage and stun |
+| net_corrupt.png | [MISSING] | Corrupt: target defense debuff |
+| inf_backstab.png | [MISSING] | Backstab: single-target strike |
+| inf_neurotoxin.png | [MISSING] | Neurotoxin: poison |
+| inf_smoke_screen.png | [MISSING] | Smoke Screen: slows enemies |
+| inf_killswitch.png | [MISSING] | Killswitch: heavy single-target strike |
+
+### Deferred item concepts (not current catalog IDs)
 | Asset | Status | Notes |
 |-------|--------|-------|
-| health_potion.png | [MISSING] | Healing item icon |
-| mana_potion.png | [MISSING] | Mana restoration icon |
-| ether.png | [MISSING] | Full mana restore |
-| phoenix_down.png | [MISSING] | Revive fallen ally |
-| antidote.png | [MISSING] | Cure poison |
-| stim_pack.png | [MISSING] | Temporary buff |
-| data_chip.png | [MISSING] | Quest item — "The Data Chip" |
-| credstick.png | [MISSING] | Currency item |
-| medkit.png | [MISSING] | Large heal |
-| grenade.png | [MISSING] | Battle item — AoE damage |
-| emp_grenade.png | [MISSING] | Battle item — stun machines |
-| smoke_bomb.png | [MISSING] | Battle item — flee boost |
+| health_potion.png | [DEFERRED] | Healing item icon |
+| mana_potion.png | [DEFERRED] | Mana restoration icon |
+| ether.png | [DEFERRED] | Full mana restore |
+| phoenix_down.png | [DEFERRED] | Revive fallen ally |
+| antidote.png | [DEFERRED] | Cure poison |
+| medkit.png | [DEFERRED] | Large heal |
+| grenade.png | [DEFERRED] | Battle item — AoE damage |
+| emp_grenade.png | [DEFERRED] | Battle item — stun machines |
+| smoke_bomb.png | [DEFERRED] | Battle item — flee boost |
 
-### Spells / Abilities
+
+### Deferred legacy ability concepts
 | Asset | Status | Notes |
 |-------|--------|-------|
-| spell_fireball.png | [MISSING] | Netrunner offensive program |
-| spell_ice.png | [MISSING] | Netrunner offensive program |
-| spell_lightning.png | [MISSING] | Netrunner offensive program |
-| spell_heal.png | [MISSING] | Netrunner healing program |
-| spell_shield.png | [MISSING] | Netrunner defensive program |
-| spell_hack.png | [MISSING] | Netrunner ability — debuff enemy |
-| spell_overload.png | [MISSING] | Netrunner ability — AoE damage |
-| spell_cloak.png | [MISSING] | Infiltrator ability — evasion buff |
-| spell_backstab.png | [MISSING] | Infiltrator ability — high damage |
-| spell_berserk.png | [MISSING] | Solo ability — attack buff |
-| spell_taunt.png | [MISSING] | Solo ability — draw aggro |
-| spell_charge.png | [MISSING] | Solo ability — rush attack |
+| spell_fireball.png | [DEFERRED] | Netrunner offensive program |
+| spell_ice.png | [DEFERRED] | Netrunner offensive program |
+| spell_lightning.png | [DEFERRED] | Netrunner offensive program |
+| spell_heal.png | [DEFERRED] | Netrunner healing program |
+| spell_shield.png | [DEFERRED] | Netrunner defensive program |
+| spell_hack.png | [DEFERRED] | Netrunner ability — debuff enemy |
+| spell_overload.png | [DEFERRED] | Netrunner ability — AoE damage |
+| spell_cloak.png | [DEFERRED] | Infiltrator ability — evasion buff |
+| spell_backstab.png | [DEFERRED] | Infiltrator ability — high damage |
+| spell_berserk.png | [DEFERRED] | Solo ability — attack buff |
+| spell_taunt.png | [DEFERRED] | Solo ability — draw aggro |
+| spell_charge.png | [DEFERRED] | Solo ability — rush attack |
 
 ---
 
 ## 8. Equipment Icons (`assets/equipment/`)
 
-### Weapons
-| Asset | Status | Notes |
-|-------|--------|-------|
-| weapon_katana.png | [MISSING] | Solo weapon |
-| weapon_monoblade.png | [MISSING] | Solo weapon upgrade |
-| weapon_pistol.png | [MISSING] | Infiltrator weapon |
-| weapon_smg.png | [MISSING] | Infiltrator weapon upgrade |
-| weapon_shock_wand.png | [MISSING] | Netrunner weapon |
-| weapon_data_staff.png | [MISSING] | Netrunner weapon upgrade |
-| weapon_vibroblade.png | [MISSING] | Endgame weapon |
-| weapon_plasma_rifle.png | [MISSING] | Endgame weapon |
+### Current slice equipment
 
-### Armor
-| Asset | Status | Notes |
-|-------|--------|-------|
-| armor_streetwear.png | [MISSING] | Starting armor |
-| armor_kevlar.png | [MISSING] | Mid-tier armor |
-| armor_tactical.png | [MISSING] | High-tier armor |
-| armor_corporate_suit.png | [MISSING] | Corporate Plaza disguise |
-| armor_netrunner_suit.png | [MISSING] | Netrunner armor |
-| armor_stealth_cloak.png | [MISSING] | Infiltrator armor |
-| armor_heavy_exo.png | [MISSING] | Endgame armor |
+Names match the stable IDs in `ItemCatalog`; weapons remain equippable through the
+shared bag rather than being restricted by the appearance of a class sprite.
 
-### Accessories
+| Asset | Status | Notes |
+| --- | --- | --- |
+| [shock_baton.png](CyberRayne/Raw/equipment/shock_baton.png) | [RAW] | Shock Baton: ATK +4 |
+| [mono_katana.png](CyberRayne/Raw/equipment/mono_katana.png) | [RAW] | Mono-Katana: ATK +8 |
+| [street_jacket.png](CyberRayne/Raw/equipment/street_jacket.png) | [RAW] | Street Jacket: DEF +3 |
+| [kevlar_weave.png](CyberRayne/Raw/equipment/kevlar_weave.png) | [RAW] | Kevlar Weave: DEF +6 |
+
+### Deferred equipment concepts
+
+These are visual wishlist ideas, not additional items in the current catalog.
+
+#### Weapons
 | Asset | Status | Notes |
 |-------|--------|-------|
-| acc_neural_implant.png | [MISSING] | Boosts magic |
-| acc_reflex_chip.png | [MISSING] | Boosts speed |
-| acc_armor_plating.png | [MISSING] | Boosts defense |
-| acc_targeting_scope.png | [MISSING] | Boosts strength |
-| acc_holo_shield.png | [MISSING] | Status resist |
+| weapon_katana.png | [DEFERRED] | Katana concept; current catalog uses mono_katana |
+| weapon_monoblade.png | [DEFERRED] | Solo weapon upgrade |
+| weapon_pistol.png | [DEFERRED] | Pistol concept; approved Rayne Solo carries a heavy pistol |
+| weapon_smg.png | [DEFERRED] | Infiltrator weapon upgrade |
+| weapon_shock_wand.png | [DEFERRED] | Netrunner weapon |
+| weapon_data_staff.png | [DEFERRED] | Netrunner weapon upgrade |
+| weapon_vibroblade.png | [DEFERRED] | Endgame weapon |
+| weapon_plasma_rifle.png | [DEFERRED] | Endgame weapon |
+
+#### Armor
+| Asset | Status | Notes |
+|-------|--------|-------|
+| armor_streetwear.png | [DEFERRED] | Starting armor |
+| armor_kevlar.png | [DEFERRED] | Mid-tier armor |
+| armor_tactical.png | [DEFERRED] | High-tier armor |
+| armor_corporate_suit.png | [DEFERRED] | Corporate Plaza disguise |
+| armor_netrunner_suit.png | [DEFERRED] | Netrunner armor |
+| armor_stealth_cloak.png | [DEFERRED] | Infiltrator armor |
+| armor_heavy_exo.png | [DEFERRED] | Endgame armor |
+
+#### Accessories
+| Asset | Status | Notes |
+|-------|--------|-------|
+| acc_neural_implant.png | [DEFERRED] | Boosts magic |
+| acc_reflex_chip.png | [DEFERRED] | Boosts speed |
+| acc_armor_plating.png | [DEFERRED] | Boosts defense |
+| acc_targeting_scope.png | [DEFERRED] | Boosts strength |
+| acc_holo_shield.png | [DEFERRED] | Status resist |
 
 ---
 
 ## 9. Audio (`assets/audio/`)
 
-> **Code/list mismatch.** `AudioManager.cpp` loads `assets/audio/bgm_main.ogg` and
-> `assets/audio/sfx_hit.wav`. This list says `bgm_menu.ogg` and `sfx_hit.ogg` — different
-> stem *and* different container. Pick one convention (`.ogg` throughout is the safe call)
-> and reconcile before authoring, or the files will land unloadable.
+AudioManager is still a stub; it does not decode or play files. `Phase5Test.cpp`
+registers example paths `bgm_main.ogg` and `sfx_hit.wav`, which are test data rather
+than runtime requirements. The filenames below are proposals. Settle formats and
+runtime registration during Phase 12 before authoring final audio.
 
 ### Music
 | Asset | Status | Notes |
 |-------|--------|-------|
-| bgm_menu.ogg | [MISSING] | Main menu theme — code currently asks for `bgm_main.ogg` |
+| bgm_menu.ogg | [MISSING] | Proposed main menu theme |
 | bgm_central.ogg | [MISSING] | Neo-Kyoto Central exploration |
 | bgm_alley.ogg | [MISSING] | Neon Alley exploration |
 | bgm_plaza.ogg | [MISSING] | Corporate Plaza exploration |
@@ -365,7 +416,7 @@ namespace, or accept that a party of three shows repeated art.
 ### SFX
 | Asset | Status | Notes |
 |-------|--------|-------|
-| sfx_hit.ogg | [MISSING] | Physical hit — code currently asks for `sfx_hit.wav` |
+| sfx_hit.ogg | [MISSING] | Proposed physical hit sound; format pending |
 | sfx_shoot.ogg | [MISSING] | Gunfire |
 | sfx_explosion.ogg | [MISSING] | Explosion |
 | sfx_heal.ogg | [MISSING] | Healing sound |
@@ -392,15 +443,15 @@ namespace, or accept that a party of three shows repeated art.
 
 | Asset | Status | Notes |
 |-------|--------|-------|
-| default_font.png | [TEMP] | 8x8 bitmap font atlas — replace with generated MSDF atlas |
-| default_font_data.dat | [MISSING] | Font metrics data (currently embedded) |
+| default_font.png | [IN GAME] | Existing bitmap font atlas; generated font data is embedded |
+| default_font_data.dat | [COVERED] | Metrics are embedded in BitmapFontData.h |
 
 ### Additional fonts for full game
 | Asset | Status | Notes |
 |-------|--------|-------|
-| font_cyber_large.png | [MISSING] | Large cyberpunk display font — titles |
-| font_cyber_small.png | [MISSING] | Small readable font — body text |
-| font_monospace.png | [MISSING] | Monospace font — HUD numbers, code snippets |
+| font_cyber_large.png | [DEFERRED] | Large cyberpunk display font — titles |
+| font_cyber_small.png | [DEFERRED] | Small readable font — body text |
+| font_monospace.png | [DEFERRED] | Monospace font — HUD numbers, code snippets |
 
 ---
 
@@ -408,18 +459,18 @@ namespace, or accept that a party of three shows repeated art.
 
 | Asset | Status | Notes |
 |-------|--------|-------|
-| vfx_fireball.png | [MISSING] | Fireball projectile sprite |
-| vfx_ice_shard.png | [MISSING] | Ice projectile sprite |
-| vfx_lightning.png | [MISSING] | Lightning bolt sprite |
-| vfx_heal_glow.png | [MISSING] | Healing glow particle |
-| vfx_hit_spark.png | [MISSING] | Impact spark particle |
-| vfx_explosion.png | [MISSING] | Explosion particle |
-| vfx_levelup.png | [MISSING] | Level up burst effect |
-| vfx_hack_stream.png | [MISSING] | Data stream visual for hacking |
-| vfx_poison.png | [MISSING] | Poison cloud particle |
-| vfx_dust.png | [MISSING] | Ambient dust particles |
-| vfx_rain.png | [MISSING] | Rain particle spritesheet |
-| vfx_neon_glow.png | [MISSING] | Neon glow overlay |
+| vfx_fireball.png | [DEFERRED] | Fireball projectile sprite |
+| vfx_ice_shard.png | [DEFERRED] | Ice projectile sprite |
+| vfx_lightning.png | [DEFERRED] | Lightning bolt sprite |
+| vfx_heal_glow.png | [DEFERRED] | Healing glow particle |
+| vfx_hit_spark.png | [DEFERRED] | Impact spark particle |
+| vfx_explosion.png | [DEFERRED] | Explosion particle |
+| vfx_levelup.png | [DEFERRED] | Level up burst effect |
+| vfx_hack_stream.png | [DEFERRED] | Data stream visual for hacking |
+| vfx_poison.png | [DEFERRED] | Poison cloud particle |
+| vfx_dust.png | [DEFERRED] | Ambient dust particles |
+| vfx_rain.png | [DEFERRED] | Rain particle spritesheet |
+| vfx_neon_glow.png | [DEFERRED] | Neon glow overlay |
 
 ---
 
@@ -427,54 +478,33 @@ namespace, or accept that a party of three shows repeated art.
 
 | Asset | Status | Notes |
 |-------|--------|-------|
-| intro_1.png | [MISSING] | Opening cutscene frame 1 |
-| intro_2.png | [MISSING] | Opening cutscene frame 2 |
-| intro_3.png | [MISSING] | Opening cutscene frame 3 |
-| ending_good.png | [MISSING] | Good ending |
-| ending_bad.png | [MISSING] | Bad ending |
-| transition_fade.png | [MISSING] | Scene transition overlay |
+| intro_1.png | [DEFERRED] | Opening cutscene frame 1 |
+| intro_2.png | [DEFERRED] | Opening cutscene frame 2 |
+| intro_3.png | [DEFERRED] | Opening cutscene frame 3 |
+| ending_good.png | [DEFERRED] | Good ending |
+| ending_bad.png | [DEFERRED] | Bad ending |
+| transition_fade.png | [COVERED] | Can be drawn as a full-screen colored quad |
 
 ---
 
-## Summary
+## Summary and next art batches
 
-**[FINAL] is zero for every hand-authored category.** Tiles are the one solved
-section, and they were solved by writing code instead of commissioning art.
+| Group | Current state |
+| --- | --- |
+| Party | 5 base sprites + 10 animation sheets integrated |
+| Enemies | 5 base sprites + 5 battle sheets integrated |
+| NPCs | 7 base sprites + 7 idle/talk sheets integrated |
+| Font | 1 existing runtime atlas |
+| Runtime image validation | 40 files pass; zero failures |
+| Tiles, menus, overlays, battle skyline | Existing procedural/code-drawn visuals |
+| Item/story and equipment icons | 9 raw originals generated; conformance and wiring remain |
+| Party ability icons | 12 planned sources using current ability IDs |
+| Optional art | District backdrops, status icons, VFX, extra cast and vehicles retained above |
+| Audio | Separate phase; backend/format work remains |
 
-| Category | Status | To author |
-|----------|--------|-----------|
-| Tile Textures | **DONE — procedural** (17 more deferred) | **0** |
-| Player Sprites | 3 TEMP, 12 MISSING, 2 CUT | 15 |
-| Enemy Sprites | 1 TEMP, 15 MISSING, 3 CUT | 16 |
-| NPC Sprites | 19 MISSING | 19 |
-| Vehicles | 17 MISSING | 17 |
-| UI Assets | 7 TEMP, 26 MISSING, 7 CUT | 33 |
-| Items & Spells | 24 MISSING | 24 |
-| Equipment | 20 MISSING | 20 |
-| Audio | 29 MISSING | 29 |
-| Fonts | 1 TEMP, 3 MISSING | 4 |
-| VFX | 12 MISSING | 12 |
-| Cutscenes | 6 MISSING | 6 |
-| **Total** | | **195** |
-
-Down from 220. The 25 tile rows are gone entirely — not deferred, not cut, just
-no longer assets. 19 rows remain [CUT] as shader work (ASSET_SPEC.md section 8).
-
-### Priority for Vertical Slice
-
-Roughly 25 assets stand between here and a coherent-looking slice:
-
-1. ~~Tile textures~~ — **done, procedural**
-2. **Player sprites** (3) — `netrunner.png`, `solo.png`, `infiltrator.png`.
-   Files exist in `assets/characters/` but are 2048x2048 with no alpha; they need
-   a `spriteprep.py` pass to reach the 96x128 RGBA spec.
-3. **Enemy sprites** (5) — one per cyberpunk enemy type
-4. **NPC sprites** (7) — one per defined NPC
-5. **Battle backgrounds** (3) — one per district
-6. **UI** — dialogue box, pause overlay, game over. (HP/MP/ATB bars are [CUT]:
-   tinted quads, not textures.)
-7. **Audio** — menu, exploration, battle music + basic SFX. Settle the
-   `.ogg`/`.wav` convention first; see section 9.
-
-Everything authored must pass `python3 tools/validate_assets.py`.
-Format rules and the production pipeline are in **ASSET_SPEC.md**.
+The old "195 assets remaining" total mixed slice requirements with speculative
+full-game ideas and counted images already replaced by code. It is retired.
+Generate a coherent batch at a time, preserve sources and prompts under `Raw/`,
+and update each row to RAW when saved, then IN GAME after conformance and wiring.
+No additional art here changes the completed Phase 11 status or advances the story
+beyond the approved three-quest slice.

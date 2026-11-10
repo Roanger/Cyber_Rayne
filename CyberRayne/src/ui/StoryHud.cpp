@@ -1,3 +1,4 @@
+#include "../../include/InputPrompts.h"
 #include "../../include/ui/StoryHud.h"
 #include "../../include/ui/TextRenderer.h"
 #include "../../include/ui/TextWrap.h"
@@ -172,11 +173,11 @@ void StoryHud::renderDialogue(VulkanRenderer* renderer, const DialogueSystem& di
 
     std::string hint;
     if (choosing) {
-        hint = "Up/Down: choose   Enter: say it";
+        hint = InputPrompts::upDown() + ": choose   " + InputPrompts::confirm() + ": say it";
     } else if (node->hasChoices()) {
-        hint = "Enter: reply";
+        hint = InputPrompts::confirm() + ": reply";
     } else {
-        hint = "Enter: continue";
+        hint = InputPrompts::confirm() + ": continue";
     }
     const int hintScale = 2;
     const int hintW = static_cast<int>(hint.size()) * GLYPH * hintScale;
@@ -195,7 +196,7 @@ void StoryHud::renderEnding(VulkanRenderer* renderer) {
         {"", 3, COLOR_TEXT},
         {"End of the vertical slice. Thanks for playing.", 3, COLOR_GOLD},
         {"", 3, COLOR_TEXT},
-        {"Enter: keep exploring", 2, COLOR_MUTED},
+        {InputPrompts::confirm() + ": keep exploring", 2, COLOR_MUTED},
     });
 }
 
@@ -219,7 +220,7 @@ void StoryHud::renderBattleResult(VulkanRenderer* renderer, const BattleSummary&
         lines.push_back({line, 3, COLOR_ROSE});
     }
     lines.push_back({"", 3, COLOR_TEXT});
-    lines.push_back({"Enter: continue", 2, COLOR_MUTED});
+    lines.push_back({InputPrompts::confirm() + ": continue", 2, COLOR_MUTED});
     drawCard(renderer, m_text.get(), lines);
 }
 
@@ -231,7 +232,7 @@ void StoryHud::renderGameOver(VulkanRenderer* renderer, bool canLoad) {
         {"", 3, COLOR_TEXT},
         {"The party has fallen.", 3, COLOR_TEXT},
         {"", 3, COLOR_TEXT},
-        {canLoad ? "Enter: load your last save" : "Enter: return to title", 2, COLOR_MUTED},
-        {"Esc: quit", 2, COLOR_MUTED},
+        {InputPrompts::confirm() + (canLoad ? ": load your last save" : ": return to title"), 2, COLOR_MUTED},
+        {InputPrompts::cancel() + ": quit", 2, COLOR_MUTED},
     });
 }

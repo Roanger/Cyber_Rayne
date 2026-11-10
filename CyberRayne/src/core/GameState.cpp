@@ -1,3 +1,4 @@
+#include "../../include/InputPrompts.h"
 #include "../../include/EnemyTypes.h"
 #include "../../include/ui/BattleScene.h"
 #include "../../include/ui/SpriteLibrary.h"
@@ -142,6 +143,10 @@ bool GameState::initialize() {
         // working on the battle screen.
         m_pendingDevBattle = (std::string(start) == "battle");
         m_pendingDevStart = m_pendingDevStart || m_pendingDevBattle;
+        // CYBERRAYNE_START=select opens on the character select screen.
+        if (std::string(start) == "select") {
+            m_currentState = State::CHARACTER_SELECTION;
+        }
     }
 
     std::cout << "Game state initialized successfully." << std::endl;
@@ -447,7 +452,7 @@ void GameState::renderWorldScene(VulkanRenderer* renderer) {
             std::string prompt;
             if (!talking && leader && !leader->isMoving()) {
                 if (const NPC* npc = m_world->findNpcNearPlayer(TALK_RANGE)) {
-                    prompt = "Enter: Talk to " + npc->getName();
+                    prompt = InputPrompts::confirm() + ": Talk to " + npc->getName();
                 }
             }
 

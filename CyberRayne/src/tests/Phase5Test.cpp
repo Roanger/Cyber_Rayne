@@ -1,5 +1,6 @@
 #include "../../include/AudioManager.h"
 #include "../../include/InputConfig.h"
+#include "../../include/InputPrompts.h"
 #include "../../include/InputState.h"
 #include <vector>
 #include "../../include/InputAction.h"
@@ -174,6 +175,37 @@ int main() {
 
         input.reset();
         expect(!input.heldDirection(dx, dy) && !input.isHeld(InputAction::MOVE_RIGHT), "reset forgets everything");
+    }
+
+    // --- InputPrompts: hints name the device in use -------------------------
+    {
+        using InputPrompts::Device;
+        expect(InputPrompts::deviceForGamepadName("Sony DualSense") == Device::PLAYSTATION, "a DualSense is a PlayStation pad");
+        expect(InputPrompts::deviceForGamepadName("PS4 Controller") == Device::PLAYSTATION, "so is a PS4 pad");
+        expect(InputPrompts::deviceForGamepadName("Xbox Series X Controller") == Device::XBOX, "an Xbox pad is an Xbox pad");
+        expect(InputPrompts::deviceForGamepadName("Steam Virtual Gamepad") == Device::XBOX, "Steam pads use Xbox names");
+        expect(InputPrompts::deviceForGamepadName("") == Device::XBOX, "an unnamed pad uses Xbox names");
+
+        InputPrompts::setBindings(nullptr);
+        InputPrompts::setDevice(Device::KEYBOARD);
+        expect(InputPrompts::confirm() == "Enter" && InputPrompts::cancel() == "Esc", "keyboard defaults");
+        expect(InputPrompts::upDown() == "Up/Down" && InputPrompts::leftRight() == "Left/Right", "keyboard directions");
+
+        InputPrompts::setDevice(Device::PLAYSTATION);
+        expect(InputPrompts::confirm() == "Cross" && InputPrompts::cancel() == "Circle" &&
+               InputPrompts::menu() == "Options", "PlayStation names");
+        InputPrompts::setDevice(Device::XBOX);
+        expect(InputPrompts::confirm() == "A" && InputPrompts::cancel() == "B" &&
+               InputPrompts::menu() == "Start", "Xbox names");
+        expect(InputPrompts::upDown() == "D-Pad", "controllers point with the D-pad");
+
+        // A rebound key shows under its new name.
+        InputConfig rebound;
+        expect(rebound.rebindKey(InputAction::CONFIRM, 32), "rebinding Confirm to Space should work");
+        InputPrompts::setBindings(&rebound);
+        InputPrompts::setDevice(Device::KEYBOARD);
+        expect(InputPrompts::confirm() == "Space", "keyboard hints follow the bindings");
+        InputPrompts::setBindings(nullptr);
     }
 
     std::cout << "Phase5Test passed" << std::endl;

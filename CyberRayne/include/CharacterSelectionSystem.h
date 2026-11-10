@@ -7,6 +7,7 @@
 #include "InputAction.h"
 
 #ifndef NO_VULKAN
+#include "ui/TextRenderer.h"
 class VulkanRenderer;
 #endif
 
@@ -53,14 +54,11 @@ private:
     int m_selectedIndex;
     bool m_characterSelected;
     
-    // Input debouncing
-    float m_inputCooldown;
-    bool m_waitingForKeyRelease;
-    
-    // Texture indices
-    int m_backgroundTextureIndex;
-    int m_selectionFrameTextureIndex;
-    int m_cursorTextureIndex;
-    
+    // Seconds on screen, for the bobbing marker.
+    float m_time = 0.0f;
+#ifndef NO_VULKAN
+    std::unique_ptr<TextRenderer> m_textRenderer;
+#endif
+
     void initializeCharacterOptions();
 };

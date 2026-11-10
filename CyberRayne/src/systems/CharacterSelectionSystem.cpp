@@ -1,3 +1,4 @@
+#include "../../include/InputPrompts.h"
 #include "../../include/CharacterSelectionSystem.h"
 #include "../../include/Player.h"
 #include <algorithm>
@@ -7,12 +8,15 @@
 
 #ifndef NO_VULKAN
 #include "../../include/VulkanRenderer.h"
+#include "../../include/ui/BattleScene.h"
+#include "../../include/ui/TextRenderer.h"
+#include "../../include/ui/TextWrap.h"
+#include "../../include/ui/Theme.h"
+#include <cmath>
 #endif
 
-CharacterSelectionSystem::CharacterSelectionSystem() 
-    : m_selectedIndex(0), m_characterSelected(false),
-      m_inputCooldown(0.0f), m_waitingForKeyRelease(true),
-      m_backgroundTextureIndex(-1), m_selectionFrameTextureIndex(-1), m_cursorTextureIndex(-1) {
+CharacterSelectionSystem::CharacterSelectionSystem()
+    : m_selectedIndex(0), m_characterSelected(false) {
     initializeCharacterOptions();
 }
 
@@ -26,41 +30,24 @@ bool CharacterSelectionSystem::initialize() {
 #ifndef NO_VULKAN
 void CharacterSelectionSystem::loadTextures(VulkanRenderer* renderer) {
     if (!renderer) return;
-    
-    std::string base = renderer->getAssetsBasePath();
-    
-    // Load background (reuse menu background)
-    std::string bgPath = base + "/ui/menu_background.png";
-    if (std::filesystem::exists(bgPath)) {
-        m_backgroundTextureIndex = renderer->loadTexture(bgPath);
-        std::cout << "Loaded character selection background: " << m_backgroundTextureIndex << std::endl;
-    } else {
-        std::cerr << "Character selection background not found: " << bgPath << std::endl;
+
+    if (!m_textRenderer) {
+        m_textRenderer = std::make_unique<TextRenderer>();
     }
-    
-    // Load cursor texture
-    std::string cursorPath = base + "/ui/cursor.png";
-    if (std::filesystem::exists(cursorPath)) {
-        m_cursorTextureIndex = renderer->loadTexture(cursorPath);
-        std::cout << "Loaded character selection cursor: " << m_cursorTextureIndex << std::endl;
-    } else {
-        std::cerr << "Character selection cursor not found: " << cursorPath << std::endl;
-    }
-    
+    m_textRenderer->initialize(renderer);
+
+    const std::string base = renderer->getAssetsBasePath();
     // Derive each portrait from its own class rather than a positional list,
     // so reordering the options cannot silently mismatch the art.
     for (auto& option : m_characterOptions) {
+        if (option.textureIndex >= 0) continue;  // already loaded
         std::string className = Player::classToString(option.charClass);
         std::transform(className.begin(), className.end(), className.begin(),
                        [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-        std::string texturePath = base + "/characters/" + className + ".png";
-
+        const std::string texturePath = base + "/characters/" + className + ".png";
         if (std::filesystem::exists(texturePath)) {
             option.textureIndex = renderer->loadTexture(texturePath);
-            std::cout << "Loaded character texture: " << texturePath
-                      << " (index: " << option.textureIndex << ")" << std::endl;
         } else {
-            option.textureIndex = -1;
             std::cerr << "Character texture not found: " << texturePath << std::endl;
         }
     }
@@ -68,40 +55,20 @@ void CharacterSelectionSystem::loadTextures(VulkanRenderer* renderer) {
 #endif
 
 void CharacterSelectionSystem::update(float deltaTime) {
-    // Update input cooldown
-    if (m_inputCooldown > 0.0f) {
-        m_inputCooldown -= deltaTime;
-    }
+    m_time += deltaTime;
 }
 
 void CharacterSelectionSystem::handleInput(InputAction action) {
     if (m_characterSelected) return;  // Already selected
-    
-    // Wait for all keys to be released first (prevents instant selection from menu)
-    if (m_waitingForKeyRelease) {
-        // key == -1 would mean no key, but we don't have that
-        // Instead, we use a cooldown that starts when entering this screen
-        if (m_inputCooldown <= 0.0f) {
-            m_waitingForKeyRelease = false;
-            m_inputCooldown = 0.3f;  // Small delay before accepting input
-        }
-        return;
-    }
-    
-    // Check cooldown to prevent rapid input
-    if (m_inputCooldown > 0.0f) return;
-    
+
+    const int count = static_cast<int>(m_characterOptions.size());
+    if (count == 0) return;
+
     if (action == InputAction::MOVE_LEFT) {
-        m_selectedIndex = (m_selectedIndex - 1 + static_cast<int>(m_characterOptions.size())) % m_characterOptions.size();
-        std::cout << "Character selection: moved to " << m_characterOptions[m_selectedIndex].name << std::endl;
-        m_inputCooldown = 0.2f;  // Debounce delay
-    }
-    else if (action == InputAction::MOVE_RIGHT) {
-        m_selectedIndex = (m_selectedIndex + 1) % m_characterOptions.size();
-        std::cout << "Character selection: moved to " << m_characterOptions[m_selectedIndex].name << std::endl;
-        m_inputCooldown = 0.2f;  // Debounce delay
-    }
-    else if (action == InputAction::CONFIRM) {
+        m_selectedIndex = (m_selectedIndex - 1 + count) % count;
+    } else if (action == InputAction::MOVE_RIGHT) {
+        m_selectedIndex = (m_selectedIndex + 1) % count;
+    } else if (action == InputAction::CONFIRM) {
         confirmSelection();
     }
 }
@@ -115,46 +82,112 @@ void CharacterSelectionSystem::confirmSelection() {
 
 #ifndef NO_VULKAN
 void CharacterSelectionSystem::render(VulkanRenderer* renderer) {
-    // Screen dimensions from swapchain
+    if (!renderer || !m_textRenderer) return;
+    TextRenderer* text = m_textRenderer.get();
     const int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
     const int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
-    
-    // Render background
-    if (m_backgroundTextureIndex >= 0) {
-        renderer->renderSpritePixelsWithTexture(0, 0, screenW, screenH, m_backgroundTextureIndex);
-    }
-    
-    // Character card layout - 3 characters horizontally centered
-    // Exactly 3x the 96x128 character sprites, so the pixels stay square.
-    const int cardW = 288;
-    const int cardH = 384;
-    const int cardSpacing = 100;
-    const int totalWidth = (cardW * 3) + (cardSpacing * 2);
-    const int startX = (screenW - totalWidth) / 2;
-    const int cardY = (screenH - cardH) / 2 - 50;  // Slightly above center
-    
-    // Cursor dimensions
-    const int cursorW = 64;
-    const int cursorH = 64;
-    
-    // Render each character option and cursor for selected one
-    for (size_t i = 0; i < m_characterOptions.size(); ++i) {
-        int cardX = startX + static_cast<int>(i) * (cardW + cardSpacing);
-        
-        // Render character portrait
-        if (m_characterOptions[i].textureIndex >= 0) {
-            renderer->renderSpritePixelsWithTexture(cardX, cardY, cardW, cardH, m_characterOptions[i].textureIndex);
+
+    BattleScene::drawBackdrop(renderer, screenW, screenH, "Neon Alley");
+    Theme::dimScreen(renderer, 0.45f);
+
+    const std::string heading = "CHOOSE RAYNE'S PATH";
+    const int headingScale = screenW >= 1000 ? 4 : 3;
+
+    // Three cards side by side. Portraits are drawn at a whole-number
+    // multiple of their 96x128 size, as large as the window allows.
+    const int count = static_cast<int>(m_characterOptions.size());
+    const int gap = 24;
+    const int margin = 32;
+    const int detailH = 190;
+    const int headingH = headingScale * Theme::GLYPH + 36;
+    const int availableW = (screenW - 2 * margin - (count - 1) * gap) / std::max(1, count);
+    const int availableH = screenH - 40 - headingH - detailH - 60;
+    const int scale = std::clamp(std::min((availableW - 32) / 96, (availableH - 80) / 128), 1, 4);
+    const int cardW = std::min(availableW, 96 * scale + 96);
+    const int cardH = 128 * scale + 80;
+    const int totalW = count * cardW + (count - 1) * gap;
+    // Centre the whole arrangement in a tall window instead of leaving the
+    // bottom half empty.
+    const int top = std::max(40, (screenH - 60 - (headingH + cardH + detailH)) / 2);
+    const int cardsTop = top + headingH;
+    const int startX = (screenW - totalW) / 2;
+
+    text->renderText(renderer, heading, (screenW - text->measureText(heading, headingScale)) / 2, top,
+                     headingScale, Theme::TEXT);
+
+    for (int i = 0; i < count; ++i) {
+        const CharacterOption& option = m_characterOptions[static_cast<std::size_t>(i)];
+        const bool selected = i == m_selectedIndex;
+        const int cardX = startX + i * (cardW + gap);
+        // The chosen card rises a little and gets a gold frame.
+        const int cardY = cardsTop + (selected ? 0 : 12);
+
+        Theme::drawPanel(renderer, cardX, cardY, cardW, cardH);
+        if (selected) {
+            // Gold frame, drawn as four strips: a filled gold block under
+            // the see-through panel would tint the whole card.
+            const int t = 4;
+            Theme::fillRect(renderer, cardX - t, cardY - t, cardW + 2 * t, t, Theme::GOLD);
+            Theme::fillRect(renderer, cardX - t, cardY + cardH, cardW + 2 * t, t, Theme::GOLD);
+            Theme::fillRect(renderer, cardX - t, cardY, t, cardH, Theme::GOLD);
+            Theme::fillRect(renderer, cardX + cardW, cardY, t, cardH, Theme::GOLD);
         }
-        
-        // Draw cursor next to selected character
-        if (static_cast<int>(i) == m_selectedIndex && m_cursorTextureIndex >= 0) {
-            // Position cursor to the left of the selected card
-            int cursorX = cardX - cursorW - 10;
-            int cursorY = cardY + (cardH / 2) - (cursorH / 2);  // Center vertically
-            renderer->renderSpritePixelsWithTexture(cursorX, cursorY, cursorW, cursorH, m_cursorTextureIndex);
+
+        const float shade = selected ? 1.0f : 0.55f;
+        if (option.textureIndex >= 0) {
+            renderer->renderSpritePixelsWithTexture(cardX + (cardW - 96 * scale) / 2, cardY + 16,
+                                                    96 * scale, 128 * scale, option.textureIndex,
+                                                    shade, shade, shade, 1.0f);
+        }
+        const std::string name = Player::classToString(option.charClass);
+        text->renderText(renderer, name, cardX + (cardW - text->measureText(name, 3)) / 2,
+                         cardY + cardH - 44, 3, selected ? Theme::GOLD : Theme::MUTED);
+
+        if (selected) {
+            // Marker above the card, bobbing.
+            const int bob = static_cast<int>(std::sin(m_time * 6.0f) * 4.0f);
+            const int tipX = cardX + cardW / 2;
+            const int tipY = cardY - 10 + bob;
+            for (int row = 0; row < 5; ++row) {
+                const int half = (5 - row) * 4;
+                Theme::fillRect(renderer, tipX - half, tipY - (5 - row) * 4, half * 2, 4, Theme::GOLD);
+            }
         }
     }
-    
+
+    // What the highlighted class is like.
+    if (m_selectedIndex >= 0 && m_selectedIndex < count) {
+        const CharacterOption& option = m_characterOptions[static_cast<std::size_t>(m_selectedIndex)];
+        const int panelW = std::min(screenW - 2 * margin, 1100);
+        const int panelX = (screenW - panelW) / 2;
+        const int panelY = cardsTop + cardH + 28;
+        Theme::drawPanel(renderer, panelX, panelY, panelW, detailH - 40);
+
+        const std::size_t maxChars = static_cast<std::size_t>(std::max(10, (panelW - 48) / (Theme::GLYPH * 2)));
+        int y = panelY + 20;
+        std::size_t lineStart = 0;
+        const std::string& description = option.description;
+        while (lineStart <= description.size()) {
+            std::size_t lineEnd = description.find('\n', lineStart);
+            if (lineEnd == std::string::npos) lineEnd = description.size();
+            const std::string paragraph = description.substr(lineStart, lineEnd - lineStart);
+            lineStart = lineEnd + 1;
+            if (paragraph.empty()) {
+                y += 10;
+                continue;
+            }
+            uint32_t color = Theme::TEXT;
+            if (paragraph.rfind("Strengths", 0) == 0) color = Theme::FOAM;
+            if (paragraph.rfind("Weaknesses", 0) == 0) color = Theme::ROSE;
+            for (const std::string& line : wrapText(paragraph, maxChars)) {
+                text->renderText(renderer, line, panelX + 24, y, 2, color);
+                y += 24;
+            }
+        }
+    }
+
+    const std::string hint = InputPrompts::leftRight() + ": choose   " + InputPrompts::confirm() + ": begin";
+    text->renderText(renderer, hint, (screenW - text->measureText(hint, 2)) / 2, screenH - 36, 2, Theme::MUTED);
 }
 #else
 void CharacterSelectionSystem::render() {

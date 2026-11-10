@@ -36,9 +36,7 @@ jobs:
   assets:
     name: Asset validation
     runs-on: ubuntu-24.04
-    # Every sprite on disk is still placeholder art, so this reports without
-    # failing the run. Make it blocking when phase 11 (slice art) lands.
-    continue-on-error: true
+    # Blocking: every asset in the repo conforms to ASSET_SPEC.md.
     steps:
       - uses: actions/checkout@v4
       - run: pip install pillow

@@ -367,9 +367,7 @@ Dev shortcut: `CYBERRAYNE_START=battle` starts a new game inside a mixed fight.
 ally-ability targeting, the result card over the battlefield). Hit flash tints red; a white
 flash needs a shader change because tint multiplies the image.
 
-## Current Phase
-
-### Phase 11: Slice Art — IN PROGRESS
+### Phase 11 notes: Slice Art
 
 Done (2026-11-10):
 - The user generated all 17 base sprites (Rayne x3, Cyph, Vash, 5 enemies, 7 NPCs) into
@@ -446,10 +444,36 @@ user found a bit fast).
 always hit the first living member, which was always Rayne. `BalanceTest` still reads
 100% everywhere, so the phase 13 "too easy" note stands.
 
-Remaining:
-- Menu UI art: `ui/cursor.png`, `ui/menu_background.png`, `ui/namebanner.png` are the last
-  three validator failures. Then make the validator blocking in CI.
-- Fix the hologram tile alpha (reads as a solid cyan floor).
+**Menus drawn from code; phase closed (2026-11-10).** The last three validator failures
+were old placeholder images for the title screen and character select (a JPEG renamed
+.png, 1408x736 images). Rather than wait on art, both screens are now drawn in the same
+Rose Pine style as everything else and the images are deleted (still in git history):
+- Title (`ui/MenuSystem`): the battle skyline (`BattleScene::drawBackdrop`, now shared),
+  a large title, and a panel of options. No `UIButton`s any more.
+- Character select: three cards with the class sprite and name, the chosen one framed in
+  gold, and a panel with that class's description. It used to show no text at all, and
+  its first key press was swallowed by an old debounce, now removed.
+- Hologram tiles draw the floor underneath and are mostly see-through.
+- The asset validator passes with zero failures and is **blocking in CI**.
+- Dev shortcut: `CYBERRAYNE_START=select` opens on character select.
+
+**Hints follow the device in use (user request, 2026-11-10).** `InputPrompts`
+(`systems/InputPrompts`, Vulkan-free, tested in `Phase5Test`) names each control for
+whatever was touched last: the keys actually bound on a keyboard (so rebinds show), or
+"Cross / Circle / Options" on a PlayStation pad, or "A / B / Start" on anything else.
+`Game.cpp` reports the device each frame; a pad plugged in at start is the default.
+**Every on-screen hint must go through `InputPrompts`, never a hard-coded key name.**
+Names are words because the bitmap font has no button symbols; drawn button icons would
+be a later step.
+
+Left over, not blocking the slice: enemy map sprites do not animate; the user wanted enemies
+to face the other way in battle (sheets face right; idle poses are near front-on).
+
+### Phase 11: Slice Art — COMPLETE (2026-11-10)
+
+See the notes above. Drawn art can still replace any code-drawn screen later.
+
+## Current Phase
 
 ### Phase 12: Audio
 

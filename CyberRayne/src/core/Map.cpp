@@ -158,6 +158,17 @@ void Map::render(VulkanRenderer* renderer) {
             float normalizedY = 0.0f;
             worldToNdc(vp, static_cast<float>(x), static_cast<float>(y), normalizedX, normalizedY);
 
+            // A hologram is a projection, not a floor: draw the ground it
+            // stands on first, or its see-through parts show the empty
+            // background and it reads as a solid block.
+            if (tile->getType() == Tile::TileType::HOLOGRAM) {
+                auto floor = m_tileTextures.find(Tile::TileType::CONCRETE);
+                if (floor != m_tileTextures.end() && floor->second >= 0) {
+                    renderer->renderSpriteWithTexture(normalizedX, normalizedY, vp.tileWidth, vp.tileHeight,
+                                                      floor->second);
+                }
+            }
+
             // Get texture index for this tile type
             int textureIndex = -1;
             auto it = m_tileTextures.find(tile->getType());

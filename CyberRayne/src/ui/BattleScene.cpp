@@ -128,8 +128,9 @@ void BattleScene::update(float deltaTime) {
     m_fx.update(deltaTime);
 }
 
-void BattleScene::renderBackdrop(VulkanRenderer* renderer, int screenW, int sceneH) const {
-    const Palette pal = paletteFor(m_mapName);
+void BattleScene::drawBackdrop(VulkanRenderer* renderer, int screenW, int sceneH,
+                               const std::string& mapName) {
+    const Palette pal = paletteFor(mapName);
     const int horizonY = static_cast<int>(static_cast<float>(sceneH) * HORIZON);
 
     // Sky: banded gradient, which suits the pixel look better than a smooth one.
@@ -142,7 +143,7 @@ void BattleScene::renderBackdrop(VulkanRenderer* renderer, int screenW, int scen
     }
 
     // Skyline: two rows of buildings with a scattering of lit windows.
-    Lcg rng{static_cast<uint32_t>(std::hash<std::string>{}(m_mapName)) | 1u};
+    Lcg rng{static_cast<uint32_t>(std::hash<std::string>{}(mapName)) | 1u};
     for (int layer = 0; layer < 2; ++layer) {
         const uint32_t body = layer == 0 ? mix(pal.building, pal.skyBottom, 0.35f) : pal.building;
         const int maxH = layer == 0 ? horizonY * 9 / 10 : horizonY * 6 / 10;
@@ -213,7 +214,7 @@ void BattleScene::render(VulkanRenderer* renderer, TextRenderer* text, SpriteLib
     // Whole-number scaling keeps pixel art crisp.
     const int scale = std::max(1, static_cast<int>(std::lround(static_cast<float>(screenH) / 540.0f)));
 
-    renderBackdrop(renderer, screenW, sceneH);
+    drawBackdrop(renderer, screenW, sceneH, m_mapName);
 
     struct Figure {
         const Combatant* who;

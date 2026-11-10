@@ -1,3 +1,4 @@
+#include "../../include/InputPrompts.h"
 #include "../../include/ui/PauseMenu.h"
 #include "../../include/Party.h"
 
@@ -113,7 +114,7 @@ PauseMenu::Command PauseMenu::handleRoot(InputAction action) {
                         return Command::QUIT_TO_TITLE;
                     }
                     m_quitArmed = true;
-                    m_status = "Unsaved progress will be lost. Enter again to quit.";
+                    m_status = "Unsaved progress will be lost. " + InputPrompts::confirm() + " again to quit.";
                     break;
                 default:
                     break;
@@ -378,7 +379,7 @@ void PauseMenu::render(VulkanRenderer* renderer, TextRenderer* text, const Party
         }
     };
 
-    std::string hint = "Esc: back";
+    std::string hint = InputPrompts::cancel() + ": back";
 
     if (m_screen == Screen::QUESTS) {
         heading("QUESTS");
@@ -435,9 +436,9 @@ void PauseMenu::render(VulkanRenderer* renderer, TextRenderer* text, const Party
                 if (!member) continue;
                 row(member->getName() + "   " + memberVitals(*member), static_cast<int>(i) == m_listIndex);
             }
-            hint = "Up/Down: select   Enter: use   Esc: back";
+            hint = InputPrompts::upDown() + ": select   " + InputPrompts::confirm() + ": use   " + InputPrompts::cancel() + ": back";
         } else {
-            hint = "Up/Down: select   Enter: use   Esc: back";
+            hint = InputPrompts::upDown() + ": select   " + InputPrompts::confirm() + ": use   " + InputPrompts::cancel() + ": back";
         }
     } else if (m_screen == Screen::EQUIP_MEMBER || m_screen == Screen::EQUIP_SLOT ||
                m_screen == Screen::EQUIP_CHOICE) {
@@ -452,7 +453,7 @@ void PauseMenu::render(VulkanRenderer* renderer, TextRenderer* text, const Party
                          gearLine("Armor: ", member->getEquippedArmor()));
                     y += 10;
                 }
-                hint = "Up/Down: select   Enter: change gear   Esc: back";
+                hint = InputPrompts::upDown() + ": select   " + InputPrompts::confirm() + ": change gear   " + InputPrompts::cancel() + ": back";
             } else {
                 const Player* member = party->getMember(static_cast<std::size_t>(m_memberIndex));
                 if (member) {
@@ -482,9 +483,9 @@ void PauseMenu::render(VulkanRenderer* renderer, TextRenderer* text, const Party
                             if (selected) note("    " + stack->prototype->getDescription());
                         }
                         row("(Remove)", m_listIndex == static_cast<int>(choices.size()), Theme::MUTED);
-                        hint = "Up/Down: select   Enter: equip   Esc: back";
+                        hint = InputPrompts::upDown() + ": select   " + InputPrompts::confirm() + ": equip   " + InputPrompts::cancel() + ": back";
                     } else {
-                        hint = "Up/Down: select   Enter: change   Esc: back";
+                        hint = InputPrompts::upDown() + ": select   " + InputPrompts::confirm() + ": change   " + InputPrompts::cancel() + ": back";
                     }
                 }
             }
@@ -512,7 +513,7 @@ void PauseMenu::render(VulkanRenderer* renderer, TextRenderer* text, const Party
             }
         }
         if (m_screen == Screen::ROOT) {
-            hint = "Up/Down: select   Enter: choose   Esc: resume";
+            hint = InputPrompts::upDown() + ": select   " + InputPrompts::confirm() + ": choose   " + InputPrompts::cancel() + ": resume";
         }
     }
 

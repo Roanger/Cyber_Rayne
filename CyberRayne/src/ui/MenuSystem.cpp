@@ -1,15 +1,17 @@
+#include "../../include/InputPrompts.h"
 #include "../../include/MenuSystem.h"
 #include "../../include/VulkanRenderer.h"
-#include "../../include/ui/UIPanel.h"
+#include "../../include/ui/BattleScene.h"
+#include "../../include/ui/Theme.h"
+
+#include <algorithm>
+#include <cmath>
 #include <iostream>
-#include <filesystem>
 
 MenuSystem::MenuSystem()
     : m_selectedOption(MenuItem::START_GAME),
       m_optionSelected(false),
       m_highlightedIndex(0),
-      m_backgroundTextureIndex(-1),
-      m_nameBannerTextureIndex(-1),
       m_textRenderer(std::make_unique<TextRenderer>()) {
     m_menuOptions = {
         "Start Game",
@@ -27,118 +29,65 @@ bool MenuSystem::initialize() {
 }
 
 void MenuSystem::loadTextures(VulkanRenderer* renderer) {
-    if (!renderer) {
-        return;
-    }
-
-    std::cout << "Loading menu textures..." << std::endl;
-
-    const std::string base = renderer->getAssetsBasePath();
-    auto exists = [](const std::string& p) { return std::filesystem::exists(p); };
-
-    const std::string bgPath = base + "/ui/menu_background.png";
-    if (exists(bgPath)) {
-        m_backgroundTextureIndex = renderer->loadTexture(bgPath);
-    } else {
-        std::cerr << "Background texture missing at: " << bgPath << std::endl;
-    }
-
-    const std::string bannerPath = base + "/ui/namebanner.png";
-    if (exists(bannerPath)) {
-        m_nameBannerTextureIndex = renderer->loadTexture(bannerPath);
-    } else {
-        std::cerr << "Name banner texture missing at: " << bannerPath << std::endl;
-    }
-
-    m_textRenderer->initialize(renderer);
-    buildMenuButtons(renderer);
-}
-
-void MenuSystem::buildMenuButtons(VulkanRenderer* renderer) {
-    if (!renderer) {
-        return;
-    }
-
-    int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
-    int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
-
-    const int buttonW = 220;
-    const int buttonH = 60;
-    const int gapY = 16;
-
-    m_menuRoot.clear();
-    m_menuButtons.clear();
-
-    // Center the vertical stack of buttons near the bottom
-    int startX = (screenW - buttonW) / 2;
-    int startY = screenH - (static_cast<int>(m_menuOptions.size()) * (buttonH + gapY)) - 80;
-
-    for (std::size_t i = 0; i < m_menuOptions.size(); ++i) {
-        auto button = std::make_unique<UIButton>(startX, startY + static_cast<int>(i) * (buttonH + gapY),
-                                                  buttonW, buttonH, m_menuOptions[i]);
-        button->setColor(0xCC222244);
-        button->setSelectedColor(0xFF6666FF);
-        button->setLabelScale(2);
-
-        MenuItem option = static_cast<MenuItem>(i);
-        button->setOnConfirm([this, option]() {
-            m_selectedOption = option;
-            m_optionSelected = true;
-        });
-
-        m_menuButtons.push_back(button.get());
-        m_menuRoot.addWidget(std::move(button));
-    }
-
-    updateSelection();
-}
-
-void MenuSystem::updateSelection() {
-    for (std::size_t i = 0; i < m_menuButtons.size(); ++i) {
-        if (m_menuButtons[i]) {
-            m_menuButtons[i]->setSelected(static_cast<int>(i) == m_highlightedIndex);
-        }
+    // The title screen is drawn from shapes and text; only the font is loaded.
+    if (renderer) {
+        m_textRenderer->initialize(renderer);
     }
 }
 
-void MenuSystem::update(float /*deltaTime*/) {
-    // No-op; input handled via handleInput
+void MenuSystem::update(float deltaTime) {
+    m_time += deltaTime;
 }
 
 void MenuSystem::render(VulkanRenderer* renderer) {
     if (!renderer) {
         return;
     }
-    renderMenuBackground(renderer);
-
-    // Buttons are placed in pixels, so lay them out again if the window
-    // changed size.
+    TextRenderer* text = m_textRenderer.get();
     const int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
     const int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
-    if (m_menuButtons.empty() || screenW != m_layoutW || screenH != m_layoutH) {
-        buildMenuButtons(renderer);
-        m_layoutW = screenW;
-        m_layoutH = screenH;
+
+    // The city at night, the same skyline the battles use.
+    BattleScene::drawBackdrop(renderer, screenW, screenH, "Neo-Kyoto Central");
+
+    // Title: as large as fits, in whole-number steps so the pixels stay square.
+    const std::string title = "CYBER RAYNE";
+    int titleScale = std::clamp(screenW / (static_cast<int>(title.size()) * Theme::GLYPH + 16), 3, 12);
+    const int titleW = text->measureText(title, titleScale);
+    const int titleX = (screenW - titleW) / 2;
+    const int titleY = screenH / 6;
+    const int offset = std::max(2, titleScale / 2);
+    text->renderText(renderer, title, titleX + offset, titleY + offset, titleScale, Theme::LOVE);
+    text->renderText(renderer, title, titleX, titleY, titleScale, Theme::TEXT);
+
+    const std::string tagline = "NEO-KYOTO NEVER SLEEPS";
+    const int taglineY = titleY + titleScale * Theme::GLYPH + 24;
+    text->renderText(renderer, tagline, (screenW - text->measureText(tagline, 2)) / 2, taglineY, 2, Theme::FOAM);
+
+    // Options, in a panel in the lower half.
+    const int rowH = 52;
+    const int panelW = 380;
+    const int panelH = static_cast<int>(m_menuOptions.size()) * rowH + 40;
+    const int panelX = (screenW - panelW) / 2;
+    const int panelY = std::max(taglineY + 80, screenH * 6 / 10 - panelH / 2);
+    Theme::drawPanel(renderer, panelX, panelY, panelW, panelH);
+
+    for (std::size_t i = 0; i < m_menuOptions.size(); ++i) {
+        const bool selected = static_cast<int>(i) == m_highlightedIndex;
+        const int rowY = panelY + 20 + static_cast<int>(i) * rowH;
+        if (selected) {
+            Theme::fillRect(renderer, panelX + 10, rowY, panelW - 20, rowH - 8, Theme::IRIS, 0.22f);
+            // The cursor nudges back and forth so the eye finds it.
+            const int nudge = static_cast<int>(std::sin(m_time * 6.0f) * 3.0f);
+            text->renderText(renderer, ">", panelX + 28 + nudge, rowY + 12, 3, Theme::GOLD);
+        }
+        text->renderText(renderer, m_menuOptions[i], panelX + 70, rowY + 12, 3,
+                         selected ? Theme::GOLD : Theme::TEXT);
     }
 
-    m_menuRoot.render(renderer, m_textRenderer.get());
-}
-
-void MenuSystem::renderMenuBackground(VulkanRenderer* renderer) {
-    int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
-    int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
-
-    if (m_backgroundTextureIndex >= 0) {
-        renderer->renderSpritePixelsWithTexture(0, 0, screenW, screenH, m_backgroundTextureIndex);
-    } else {
-        renderer->renderColoredRectPixels(0, 0, screenW, screenH, 0.05f, 0.05f, 0.1f, 1.0f);
-    }
-
-    if (m_nameBannerTextureIndex >= 0) {
-        const int bannerW = 450;
-        const int bannerH = 230;
-        renderer->renderSpritePixelsWithTexture(50, 50, bannerW, bannerH, m_nameBannerTextureIndex);
-    }
+    const std::string hint = InputPrompts::upDown() + ": select   " + InputPrompts::confirm() + ": choose";
+    text->renderText(renderer, hint, (screenW - text->measureText(hint, 2)) / 2,
+                     std::min(screenH - 40, panelY + panelH + 24), 2, Theme::MUTED);
 }
 
 void MenuSystem::handleInput(InputAction action) {
@@ -150,19 +99,16 @@ void MenuSystem::handleInput(InputAction action) {
         case InputAction::MOVE_UP:
             if (m_highlightedIndex > 0) {
                 --m_highlightedIndex;
-                updateSelection();
             }
             break;
         case InputAction::MOVE_DOWN:
             if (m_highlightedIndex + 1 < static_cast<int>(m_menuOptions.size())) {
                 ++m_highlightedIndex;
-                updateSelection();
             }
             break;
         case InputAction::CONFIRM:
-            if (m_highlightedIndex >= 0 && m_highlightedIndex < static_cast<int>(m_menuButtons.size())) {
-                m_menuButtons[m_highlightedIndex]->handleInput(InputAction::CONFIRM);
-            }
+            m_selectedOption = static_cast<MenuItem>(m_highlightedIndex);
+            m_optionSelected = true;
             break;
         default:
             break;

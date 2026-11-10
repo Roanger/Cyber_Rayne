@@ -242,8 +242,12 @@ void makeHologram(Canvas& c) {
 
         for (int x = 0; x < n; ++x) {
             Color px = shade(tint, band * (0.85f + noise(x, y, n, 51u) * 0.3f));
-            // Partial transparency, stronger on the scanlines.
-            px.a = static_cast<uint8_t>(scan ? 190 : 110);
+            // Mostly see-through, so the floor underneath shows; the
+            // scanlines carry the light. Clear at the rim, so it reads as a
+            // projection standing on the tile rather than a painted square.
+            const int rim = n / 8;
+            const bool inside = x >= rim && x < n - rim && y >= rim && y < n - rim;
+            px.a = static_cast<uint8_t>(!inside ? 0 : (scan ? 200 : 60));
 
             // Occasional dropout, as if the projection is unstable.
             if (noise(x, y, n, 52u) > 0.97f) {

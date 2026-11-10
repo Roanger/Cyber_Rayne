@@ -21,7 +21,7 @@ phase live in [AGENTS.md](AGENTS.md).
 - Walking animation on the map, and NPCs that idle and gesture when spoken to
 - Procedurally generated pixel-art tiles
 
-Still to come: audio and menu art.
+Still to come: audio.
 
 ## Building (Linux)
 
@@ -43,7 +43,8 @@ cd CyberRayne/out/build/linux-debug
 
 `CYBERRAYNE_START=world ./CyberRayne` skips the menus and drops straight into
 exploration. `CYBERRAYNE_START=load` resumes the saved game, and
-`CYBERRAYNE_START=battle` starts inside a test fight.
+`CYBERRAYNE_START=battle` starts inside a test fight, and `CYBERRAYNE_START=select`
+opens on character select.
 
 Windows presets (`x64-debug`, `x64-release`) exist in `CMakePresets.json` and need the
 Vulkan SDK.
@@ -60,7 +61,8 @@ Defaults; all can be changed under Settings.
 | M or P | Options / Start, or Triangle / Y | Pause menu (party, items, equipment, quests, save, settings) |
 
 Controllers work on Linux through GLFW, which knows PlayStation, Xbox and Steam Input
-pads. Controller buttons are fixed; only keys can be rebound. For a pad GLFW does not
+pads. Controller buttons are fixed; only keys can be rebound. On-screen hints name the
+controls of whichever device was used last. For a pad GLFW does not
 recognise, put an SDL `gamecontrollerdb.txt` in `~/.config/CyberRayne/`.
 
 ## Layout

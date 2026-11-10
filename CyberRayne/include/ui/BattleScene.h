@@ -39,6 +39,10 @@ public:
     void render(VulkanRenderer* renderer, TextRenderer* text, SpriteLibrary* sprites,
                 const Combatant* actor, const Combatant* target);
 
+    // The district skyline on its own, for screens other than a battle
+    // (title, character select). Fills width x height from the top-left.
+    static void drawBackdrop(VulkanRenderer* renderer, int width, int height, const std::string& mapName);
+
 private:
     struct Placement {
         int feetX = 0;   // centre of the feet
@@ -47,7 +51,6 @@ private:
         int height = 0;
     };
 
-    void renderBackdrop(VulkanRenderer* renderer, int screenW, int sceneH) const;
     Placement place(bool enemySide, std::size_t index, std::size_t count,
                     int frameW, int frameH, int screenW, int sceneH, int scale) const;
 
