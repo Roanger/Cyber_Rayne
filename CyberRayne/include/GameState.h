@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AudioSettings.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -147,6 +148,9 @@ private:
     void updateMusic();
     // Menu blips for an input, when a menu is what the input is going to.
     void playUiSound(InputAction action);
+    // Push the player's volume choices to the sound system.
+    void applyAudioSettings();
+    AudioSettings m_audioSettings;
     // Whose turn it was last frame, to notice a new turn starting.
     const Combatant* m_lastBattleActor = nullptr;
 

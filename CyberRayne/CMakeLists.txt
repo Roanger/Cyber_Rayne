@@ -87,6 +87,7 @@ add_executable(CyberRayne
     src/systems/InputConfig.cpp
     src/systems/InputState.cpp
     src/systems/InputPrompts.cpp
+    src/systems/AudioSettings.cpp
     src/graphics/VulkanRenderer.cpp
     src/graphics/TileTextureGen.cpp
     src/ui/MenuSystem.cpp
@@ -193,6 +194,7 @@ add_executable(Phase5Test
     src/systems/InputConfig.cpp
     src/systems/InputState.cpp
     src/systems/InputPrompts.cpp
+    src/systems/AudioSettings.cpp
 )
 
 add_executable(AbilityTest
@@ -273,6 +275,7 @@ add_executable(MenuTest
     src/systems/InputConfig.cpp
     ${GAMEPLAY_TEST_SUPPORT_SOURCES}
     src/systems/InputPrompts.cpp
+    src/systems/AudioSettings.cpp
 )
 
 foreach(test_target CharacterSelectionTest BattleSystemTest EnemyTypesTest BitmapFontTest DialogueSystemTest QuestTest ProgressionTest SaveLoadTest ContentTest Phase5Test EncounterTest StatusEffectTest AbilityTest StoryTest MenuTest InventoryTest BalanceTest BattlePresentationTest)

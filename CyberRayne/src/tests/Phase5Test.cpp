@@ -260,7 +260,8 @@ int main() {
         InputPrompts::setDevice(Device::XBOX);
         expect(InputPrompts::confirm() == "A" && InputPrompts::cancel() == "B" &&
                InputPrompts::menu() == "Start", "Xbox names");
-        expect(InputPrompts::upDown() == "D-Pad", "controllers point with the D-pad");
+        expect(InputPrompts::upDown() == "Up/Down" && InputPrompts::leftRight() == "Left/Right",
+               "controllers name the direction, since stick and D-pad both work");
 
         // A rebound key shows under its new name.
         InputConfig rebound;

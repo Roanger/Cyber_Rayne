@@ -29,7 +29,7 @@ Device deviceForGamepadName(const std::string& name);
 std::string confirm();    // "Enter" / "Cross" / "A"
 std::string cancel();     // "Esc" / "Circle" / "B"
 std::string menu();       // "M" / "Options" / "Start"
-std::string upDown();     // "Up/Down" / "D-Pad"
-std::string leftRight();  // "Left/Right" / "D-Pad"
+std::string upDown();     // the bound keys, or "Up/Down" on a controller
+std::string leftRight();  // the bound keys, or "Left/Right" on a controller
 
 }  // namespace InputPrompts

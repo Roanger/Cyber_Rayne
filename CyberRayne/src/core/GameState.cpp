@@ -125,6 +125,8 @@ bool GameState::initialize() {
     m_audioManager->setMusicFallback("plaza", "central");
     m_audioManager->setMusicFallback("boss", "battle");
     m_audioManager->setMusicFallback("ending", "title");
+    m_audioSettings.loadFromFile(AudioSettings::defaultConfigPath());
+    applyAudioSettings();
 
     // Initialize input config with default bindings
     m_inputConfig = std::make_unique<InputConfig>();
@@ -150,6 +152,10 @@ bool GameState::initialize() {
         // working on the battle screen.
         m_pendingDevBattle = (std::string(start) == "battle");
         m_pendingDevStart = m_pendingDevStart || m_pendingDevBattle;
+        // CYBERRAYNE_START=settings opens on the settings screen.
+        if (std::string(start) == "settings") {
+            openSettings();
+        }
         // CYBERRAYNE_START=select opens on the character select screen.
         if (std::string(start) == "select") {
             m_currentState = State::CHARACTER_SELECTION;
@@ -164,6 +170,15 @@ void GameState::sfx(const std::string& name) {
     if (m_audioManager) {
         m_audioManager->playSfx(name);
     }
+}
+
+void GameState::applyAudioSettings() {
+    if (!m_audioManager) {
+        return;
+    }
+    m_audioManager->setMasterVolume(AudioSettings::toVolume(m_audioSettings.master));
+    m_audioManager->setMusicVolume(AudioSettings::toVolume(m_audioSettings.music));
+    m_audioManager->setSFXVolume(AudioSettings::toVolume(m_audioSettings.effects));
 }
 
 void GameState::updateMusic() {
@@ -631,6 +646,13 @@ void GameState::handleInput(InputAction action) {
         } else if (m_settingsMenu->consumeChanged()) {
             m_inputConfig->saveToFile(InputConfig::defaultConfigPath());
         }
+        if (m_settingsMenu->consumeVolumeChanged()) {
+            m_audioSettings = m_settingsMenu->getVolumes();
+            applyAudioSettings();
+            m_audioSettings.saveToFile(AudioSettings::defaultConfigPath());
+            // Heard at the new level straight away, so the change can be judged.
+            sfx("ui_confirm");
+        }
     } else if (m_currentState == State::BATTLE_RESULT) {
         if (action == InputAction::CONFIRM) {
             m_currentState = State::WORLD_EXPLORATION;
@@ -1013,6 +1035,7 @@ void GameState::openSettings() {
         return;
     }
     m_settingsReturnState = m_currentState;
+    m_settingsMenu->setVolumes(m_audioSettings);
     m_settingsMenu->open();
     m_currentState = State::SETTINGS;
 }

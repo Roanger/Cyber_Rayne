@@ -536,8 +536,12 @@ Done (2026-11-11):
 - A second session generated starter audio for all 41 files with
   `tools/generate_audio.py` (synthesised; any file can be replaced by a real one).
 
+- **Volume controls (2026-11-14).** Settings has Master, Music and Effects rows, changed
+  with Left/Right in ten steps. `AudioSettings` holds them and saves to
+  `~/.config/CyberRayne/audio.cfg`, beside the key bindings; `GameState` applies them at
+  start and on every change. Dev shortcut: `CYBERRAYNE_START=settings`.
+
 Remaining:
-- Volume sliders in Settings (music and effects), saved with the key bindings.
 - Wire `ui_equip` (the equip screen is handled inside `PauseMenu`).
 - Replace the synthesised music with the composer's tracks as they arrive.
 - By ear: check levels between music and effects, and that looping tracks loop cleanly.

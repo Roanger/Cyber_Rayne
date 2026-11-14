@@ -16,13 +16,13 @@ phase live in [AGENTS.md](AGENTS.md).
 - NPC dialogue with choices, and a three-quest story with fixed fights and an ending
 - A shared party bag with healing items and equipment, usable in battle and from the pause menu
 - Save anywhere from the pause menu; saves live in `~/.local/share/CyberRayne/`
-- Rebindable keys (Settings), stored in `~/.config/CyberRayne/input.cfg`
+- Rebindable keys and volume controls (Settings), stored in `~/.config/CyberRayne/`
 - A battle screen with animated character and enemy sprites, damage numbers and status tags
 - Walking animation on the map, and NPCs that idle and gesture when spoken to
 - Procedurally generated pixel-art tiles
 - Music and sound effects (drop files into `assets/audio/music` and `assets/audio/sfx`)
 
-Still to come: volume settings and final music.
+Still to come: final music.
 
 ## Building (Linux)
 

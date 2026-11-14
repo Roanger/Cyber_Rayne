@@ -2,6 +2,7 @@
 #include "../../include/InputConfig.h"
 #include "../../include/Party.h"
 #include "../../include/ui/PauseMenu.h"
+#include "../../include/AudioSettings.h"
 #include "../../include/ui/SettingsMenu.h"
 
 #include <cstdio>
@@ -225,15 +226,78 @@ int main() {
 
         SettingsMenu settings;
         settings.open();
-        expect(SettingsMenu::rowCount() == 10, "eight actions, reset, and back");
+        expect(SettingsMenu::rowCount() == 13, "three volumes, eight actions, reset, and back");
         expect(!settings.wantsRawKey(), "nothing is being rebound at first");
+
+        // Volume rows come first and are changed with Left and Right.
+        {
+            AudioSettings start;
+            start.master = 10;
+            start.music = 7;
+            start.effects = 1;
+            settings.setVolumes(start);
+            expect(!settings.consumeVolumeChanged(), "setting the volumes is not a change by the player");
+            settings.handleInput(InputAction::MOVE_RIGHT, config);
+            expect(settings.getVolumes().master == 10 && !settings.consumeVolumeChanged(),
+                   "volume stops at the top");
+            settings.handleInput(InputAction::MOVE_LEFT, config);
+            expect(settings.getVolumes().master == 9 && settings.consumeVolumeChanged() &&
+                       !settings.consumeVolumeChanged(),
+                   "Left turns the master volume down, reported once");
+            expect(settings.handleInput(InputAction::CONFIRM, config) == SettingsMenu::Command::NONE &&
+                       !settings.wantsRawKey() && !settings.getStatus().empty(),
+                   "Confirm on a volume row explains itself and binds nothing");
+            settings.handleInput(InputAction::MOVE_DOWN, config);
+            settings.handleInput(InputAction::MOVE_RIGHT, config);
+            expect(settings.getVolumes().music == 8 && settings.getVolumes().master == 9, "each row has its own level");
+            settings.handleInput(InputAction::MOVE_DOWN, config);
+            settings.handleInput(InputAction::MOVE_LEFT, config);
+            settings.handleInput(InputAction::MOVE_LEFT, config);
+            expect(settings.getVolumes().effects == 0, "volume stops at zero");
+            settings.consumeVolumeChanged();
+            // On to the first key binding.
+            settings.handleInput(InputAction::MOVE_DOWN, config);
+            settings.handleInput(InputAction::MOVE_LEFT, config);
+            expect(!settings.consumeVolumeChanged(), "Left does nothing on a key binding row");
+            expect(settings.getIndex() == SettingsMenu::VOLUME_ROWS, "the key bindings follow the volumes");
+        }
+
+        // Volume settings survive a round trip through a file.
+        {
+            namespace fs = std::filesystem;
+            const fs::path dir = fs::temp_directory_path() / "cyberrayne_audiocfg" / "nested";
+            fs::remove_all(dir.parent_path());
+            const std::string path = (dir / "audio.cfg").string();
+            AudioSettings saved;
+            saved.master = 4;
+            saved.music = 0;
+            saved.effects = 9;
+            expect(saved.saveToFile(path), "volumes save, creating directories");
+            AudioSettings loaded;
+            expect(loaded.loadFromFile(path) && loaded.master == 4 && loaded.music == 0 && loaded.effects == 9,
+                   "volumes load");
+            { std::ofstream out(path); out << "master=99\nmusic=-3\neffects=banana\n"; }
+            AudioSettings clamped;
+            expect(clamped.loadFromFile(path) && clamped.master == 10 && clamped.music == 0 &&
+                       clamped.effects == 10,
+                   "out-of-range values are clamped and nonsense is skipped");
+            { std::ofstream out(path); out << "garbage\n"; }
+            AudioSettings untouched;
+            untouched.music = 3;
+            expect(!untouched.loadFromFile(path) && untouched.music == 3, "an unusable file changes nothing");
+            expect(!untouched.loadFromFile((dir / "missing.cfg").string()), "a missing file is reported");
+            fs::remove_all(dir.parent_path());
+            expect(AudioSettings::toVolume(7) > 0.69f && AudioSettings::toVolume(7) < 0.71f &&
+                       AudioSettings::toVolume(99) == 1.0f,
+                   "steps convert to a 0-1 volume");
+        }
 
         // Rebind Move Up to W.
         expect(settings.handleInput(InputAction::CONFIRM, config) == SettingsMenu::Command::NONE &&
                    settings.wantsRawKey(),
                "choosing an action waits for a key");
         expect(settings.handleInput(InputAction::MOVE_DOWN, config) == SettingsMenu::Command::NONE &&
-                   settings.getIndex() == 0,
+                   settings.getIndex() == SettingsMenu::VOLUME_ROWS,
                "navigation is ignored while waiting for a key");
         settings.handleRawKey('W', config);
         expect(!settings.wantsRawKey(), "one key ends the wait");

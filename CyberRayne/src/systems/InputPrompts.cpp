@@ -70,15 +70,17 @@ std::string menu() {
 }
 
 std::string upDown() {
+    // On a controller the stick and the D-pad both work, so the hint names
+    // the direction rather than one of them.
     if (g_device != Device::KEYBOARD) {
-        return "D-Pad";
+        return "Up/Down";
     }
     return keyFor(InputAction::MOVE_UP, "Up") + "/" + keyFor(InputAction::MOVE_DOWN, "Down");
 }
 
 std::string leftRight() {
     if (g_device != Device::KEYBOARD) {
-        return "D-Pad";
+        return "Left/Right";
     }
     return keyFor(InputAction::MOVE_LEFT, "Left") + "/" + keyFor(InputAction::MOVE_RIGHT, "Right");
 }
