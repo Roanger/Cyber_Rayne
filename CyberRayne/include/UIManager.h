@@ -8,6 +8,8 @@
 #include "BattleSystem.h"
 #include "ui/TextRenderer.h"
 
+class SpriteLibrary;
+
 class VulkanRenderer;
 class Party;
 class Combatant;
@@ -38,6 +40,8 @@ public:
     // Battle UI methods
     // enemies and allies are the living combatants on each side, in the order
     // BattleSystem counts target indices.
+    // Where icons come from. Not owned; without it the menus are text only.
+    void setSprites(SpriteLibrary* sprites) { m_sprites = sprites; }
     void renderBattleUI(VulkanRenderer* renderer, Party* party,
                         const std::vector<Combatant*>& enemies,
                         const std::vector<Combatant*>& allies);
@@ -79,6 +83,9 @@ private:
     struct MenuEntry {
         std::string label;
         bool enabled = true;
+        // Icon to show beside the label: assets/<iconCategory>/<iconId>.png.
+        std::string iconCategory = {};
+        std::string iconId = {};
     };
 
     void renderCommandPanel(VulkanRenderer* renderer, int x, int y, int w, int h);
@@ -105,6 +112,7 @@ private:
     int m_pendingItemIndex = -1;
 
     std::vector<MenuEntry> m_entries;
+    SpriteLibrary* m_sprites = nullptr;
     std::string m_statusMessage;
 
     // Reusable UI primitives

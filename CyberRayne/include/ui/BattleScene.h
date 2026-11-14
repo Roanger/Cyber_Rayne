@@ -34,6 +34,8 @@ public:
     void onEvents(const std::vector<BattleSystem::BattleEvent>& events) { m_fx.onEvents(events); }
     void update(float deltaTime);
     bool isBusy() const { return m_fx.isBusy(); }
+    // Play an effect animation on someone in the scene (see BattleFx).
+    void playEffect(const Combatant* who, const std::string& sheet) { m_fx.playEffect(who, sheet); }
 
     // actor: whose turn it is (marked). target: who the menu cursor is on.
     void render(VulkanRenderer* renderer, TextRenderer* text, SpriteLibrary* sprites,
@@ -51,6 +53,9 @@ private:
         int height = 0;
     };
 
+    // Draws the district's painted backdrop if it has one. False if not, so
+    // the caller can fall back to the generated skyline.
+    bool drawBackdropArt(VulkanRenderer* renderer, SpriteLibrary* sprites, int screenW, int sceneH) const;
     Placement place(bool enemySide, std::size_t index, std::size_t count,
                     int frameW, int frameH, int screenW, int sceneH, int scale) const;
 

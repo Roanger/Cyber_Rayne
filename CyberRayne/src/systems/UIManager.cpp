@@ -1,3 +1,4 @@
+#include "../../include/ui/SpriteLibrary.h"
 #include "../../include/InputPrompts.h"
 #include "../../include/UIManager.h"
 #include "../../include/VulkanRenderer.h"
@@ -86,7 +87,7 @@ void UIManager::refreshEntries() {
                 oss << ability->getName() << "  " << ability->getManaCost() << "MP";
                 // Unaffordable abilities stay visible but greyed, so the player
                 // can see what they are saving toward.
-                m_entries.push_back({oss.str(), ability->canAfford(m_currentActor)});
+                m_entries.push_back({oss.str(), ability->canAfford(m_currentActor), "spells", ability->getId()});
             }
             break;
         }
@@ -95,7 +96,8 @@ void UIManager::refreshEntries() {
             if (!m_party) break;
             // Same order BattleSystem resolves itemIndex against.
             for (const Inventory::Stack* stack : m_party->getBag().getStacksOfType(Item::ItemType::CONSUMABLE)) {
-                m_entries.push_back({stack->prototype->getName() + "  x" + std::to_string(stack->count), true});
+                m_entries.push_back({stack->prototype->getName() + "  x" + std::to_string(stack->count), true,
+                                     "items", stack->prototype->getId()});
             }
             break;
         }
@@ -340,7 +342,18 @@ void UIManager::renderCommandPanel(VulkanRenderer* renderer, int x, int y, int w
             Theme::fillRect(renderer, ex, ey, colW - 8, rowH - 6, Theme::IRIS, m_entries[i].enabled ? 1.0f : 0.45f);
             color = Theme::BASE;
         }
-        text->renderText(renderer, m_entries[i].label, ex + 10, ey + 9, 2, color);
+        int labelX = ex + 10;
+#ifndef NO_VULKAN
+        if (m_sprites && !m_entries[i].iconId.empty()) {
+            const Sprite& icon = m_sprites->icon(m_entries[i].iconCategory, m_entries[i].iconId);
+            if (icon.valid()) {
+                const float shade = m_entries[i].enabled ? 1.0f : 0.45f;
+                m_sprites->draw(icon, ex + 4, ey + 1, 32, 32, shade, shade, shade);
+                labelX = ex + 44;
+            }
+        }
+#endif
+        text->renderText(renderer, m_entries[i].label, labelX, ey + 9, 2, color);
     }
 }
 
@@ -387,7 +400,13 @@ void UIManager::renderPartyPanel(VulkanRenderer* renderer, Party* party, int x, 
         for (const auto& effect : member->getStatusEffects()) {
             if (!effect || effect->isExpired() || down) continue;
             const StatusTag tag = statusTagFor(effect->getType());
-            tagX += text->renderText(renderer, tag.text, tagX, ry + 30, 1, tag.color) + 8;
+            const Sprite* icon = m_sprites ? &m_sprites->icon("ui", tag.icon) : nullptr;
+            if (icon && icon->valid()) {
+                m_sprites->draw(*icon, tagX, ry + 26, 16, 16);
+                tagX += 20;
+            } else {
+                tagX += text->renderText(renderer, tag.text, tagX, ry + 30, 1, tag.color) + 8;
+            }
         }
 
         int cx = x + pad + nameW;

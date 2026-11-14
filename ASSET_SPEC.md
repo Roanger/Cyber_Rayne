@@ -25,10 +25,12 @@ they read clearly against the ground without dwarfing it.
 | Equipment icons | `assets/equipment/` | 32x32 | required | authored |
 | VFX | `assets/vfx/` | 32x32 – 64x64 | required | authored |
 | UI | `assets/ui/` | up to 640x360 | required | authored |
-| Backgrounds | `assets/backgrounds/` | 320x180 – 640x360 | not required | authored / generated |
+| Backgrounds | `assets/backgrounds/` | 320x180 – 960x540 | not required | authored / generated |
 | Fonts | `assets/fonts/` | atlas | not required | authored |
 
-640x360 is the pixel-art canvas that integer-scales exactly 3x to 1920x1080.
+640x360 is the pixel-art canvas that integer-scales exactly 3x to 1920x1080. Battle
+backdrops use 960x540, which scales 2x, the same as the battle sprites; conform them with
+`spriteprep.py --category backgrounds --size 960x540 --fill`.
 
 The machine-readable version of this table lives in `CyberRayne/tools/asset_spec.py`.
 Change it there, not here, and update this table to match.

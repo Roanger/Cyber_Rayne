@@ -3,6 +3,7 @@
 #include "../../include/Party.h"
 
 #ifndef NO_VULKAN
+#include "../../include/ui/SpriteLibrary.h"
 #include "../../include/Quest.h"
 #include "../../include/QuestLog.h"
 #include "../../include/VulkanRenderer.h"
@@ -301,7 +302,7 @@ std::string memberVitals(const Player& member) {
 }  // namespace
 
 void PauseMenu::render(VulkanRenderer* renderer, TextRenderer* text, const Party* party,
-                       const QuestLog* questLog, const std::string& mapName) {
+                       const QuestLog* questLog, const std::string& mapName, SpriteLibrary* sprites) {
     if (!renderer || !text) return;
 
     const int screenW = static_cast<int>(renderer->getSwapchainExtent().width);
@@ -367,10 +368,20 @@ void PauseMenu::render(VulkanRenderer* renderer, TextRenderer* text, const Party
         y += bigLine + 8;
     };
     // One row of a cursor list.
-    auto row = [&](const std::string& label, bool selected, uint32_t idleColor = Theme::TEXT) {
-        text->renderText(renderer, (selected ? "> " : "  ") + label, textX, y, big,
-                         selected ? Theme::GOLD : idleColor);
-        y += bigLine;
+    // item: draw its icon between the cursor and the label, if it has one.
+    auto row = [&](const std::string& label, bool selected, uint32_t idleColor = Theme::TEXT,
+                   const Item* item = nullptr) {
+        const uint32_t color = selected ? Theme::GOLD : idleColor;
+        const Sprite* icon = (item && sprites) ? &sprites->itemIcon(*item) : nullptr;
+        if (icon && icon->valid()) {
+            const int cursorW = text->renderText(renderer, selected ? "> " : "  ", textX, y, big, color);
+            const int size = 32;
+            sprites->draw(*icon, textX + cursorW, y + (Theme::GLYPH * big - size) / 2, size, size);
+            text->renderText(renderer, label, textX + cursorW + size + 10, y, big, color);
+        } else {
+            text->renderText(renderer, (selected ? "> " : "  ") + label, textX, y, big, color);
+        }
+        y += std::max(bigLine, 38);
     };
     auto note = [&](const std::string& line, uint32_t color = Theme::MUTED) {
         for (const auto& wrapped : wrapText(line, maxChars)) {
@@ -417,7 +428,8 @@ void PauseMenu::render(VulkanRenderer* renderer, TextRenderer* text, const Party
                 const bool selected = static_cast<int>(i) == cursor;
                 if (selected) focused = stacks[i].prototype.get();
                 row(stacks[i].prototype->getName() + "  x" + std::to_string(stacks[i].count),
-                    selected && !choosingTarget, selected ? Theme::FOAM : Theme::TEXT);
+                    selected && !choosingTarget, selected ? Theme::FOAM : Theme::TEXT,
+                    stacks[i].prototype.get());
             }
             if (stacks.empty()) {
                 note("The bag is empty.");
@@ -466,9 +478,9 @@ void PauseMenu::render(VulkanRenderer* renderer, TextRenderer* text, const Party
                     const bool pickingSlot = m_screen == Screen::EQUIP_SLOT;
                     const int slotCursor = pickingSlot ? m_listIndex : m_slotIndex;
                     row(gearLine("Weapon: ", member->getEquippedWeapon()), pickingSlot && slotCursor == 0,
-                        slotCursor == 0 ? Theme::FOAM : Theme::TEXT);
+                        slotCursor == 0 ? Theme::FOAM : Theme::TEXT, member->getEquippedWeapon());
                     row(gearLine("Armor:  ", member->getEquippedArmor()), pickingSlot && slotCursor == 1,
-                        slotCursor == 1 ? Theme::FOAM : Theme::TEXT);
+                        slotCursor == 1 ? Theme::FOAM : Theme::TEXT, member->getEquippedArmor());
 
                     if (!pickingSlot) {
                         y += 18;
@@ -479,7 +491,8 @@ void PauseMenu::render(VulkanRenderer* renderer, TextRenderer* text, const Party
                             const Inventory::Stack* stack = party->getBag().find(choices[i]);
                             if (!stack) continue;
                             const bool selected = static_cast<int>(i) == m_listIndex;
-                            row(stack->prototype->getName() + "  x" + std::to_string(stack->count), selected);
+                            row(stack->prototype->getName() + "  x" + std::to_string(stack->count), selected,
+                                Theme::TEXT, stack->prototype.get());
                             if (selected) note("    " + stack->prototype->getDescription());
                         }
                         row("(Remove)", m_listIndex == static_cast<int>(choices.size()), Theme::MUTED);

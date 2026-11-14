@@ -12,8 +12,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Warnings on for all of our own targets. stb_image is silenced at its include site.
 if(MSVC)
     add_compile_options(/W4)
+    set_source_files_properties(src/systems/AudioBackendMiniaudio.cpp PROPERTIES COMPILE_OPTIONS "/w")
 else()
     add_compile_options(-Wall -Wextra)
+    set_source_files_properties(src/systems/AudioBackendMiniaudio.cpp PROPERTIES COMPILE_OPTIONS "-w")
 endif()
 
 if(WIN32)
@@ -73,6 +75,8 @@ add_executable(CyberRayne
     src/systems/ContentFactory.cpp
     src/systems/StoryDirector.cpp
     src/systems/AudioManager.cpp
+    src/systems/AudioBackendMiniaudio.cpp
+    src/systems/BattleSounds.cpp
     src/ui/StoryHud.cpp
     src/ui/PauseMenu.cpp
     src/ui/SettingsMenu.cpp
@@ -185,6 +189,7 @@ add_executable(ContentTest
 add_executable(Phase5Test
     src/tests/Phase5Test.cpp
     src/systems/AudioManager.cpp
+    src/systems/AudioBackendNone.cpp
     src/systems/InputConfig.cpp
     src/systems/InputState.cpp
     src/systems/InputPrompts.cpp
@@ -258,6 +263,7 @@ add_executable(BattlePresentationTest
     src/systems/BattleSystem.cpp
     src/ui/BattleFx.cpp
     ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+    src/systems/BattleSounds.cpp
 )
 
 add_executable(MenuTest
@@ -346,6 +352,17 @@ if(WIN32)
     target_link_libraries(CyberRayne ${Vulkan_LIBRARIES})
 else()
     target_link_libraries(CyberRayne Vulkan::Vulkan glfw)
+    # miniaudio loads the system's sound libraries itself at run time.
+    find_package(Threads REQUIRED)
+    target_link_libraries(CyberRayne Threads::Threads ${CMAKE_DL_LIBS} m)
+endif()
+
+# Third-party audio sources (miniaudio, stb_vorbis) are not written for our
+# warning level; keep the project's own code at zero warnings without them.
+if(MSVC)
+    set_source_files_properties(src/systems/AudioBackendMiniaudio.cpp PROPERTIES COMPILE_OPTIONS "/W0")
+else()
+    set_source_files_properties(src/systems/AudioBackendMiniaudio.cpp PROPERTIES COMPILE_OPTIONS "-w")
 endif()
 
 # For the test, we don't need Vulkan

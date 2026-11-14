@@ -44,6 +44,25 @@ public:
         float age = 0.0f;
     };
 
+    // An effect animation playing on a combatant: an eight-frame sheet from
+    // assets/vfx/.
+    struct Effect {
+        const Combatant* who = nullptr;
+        std::string sheet;       // file name without .png, e.g. "vfx_hit_spark"
+        float framesPerSecond = 12.0f;
+        bool flip = false;       // mirrored, for effects travelling right to left
+        bool onGround = false;   // sits at the feet (rings, bursts) rather than the body
+        float age = 0.0f;
+
+        // Which of the eight frames to show; EFFECT_FRAMES or more means over.
+        int frame() const { return static_cast<int>(age * framesPerSecond); }
+    };
+    static constexpr int EFFECT_FRAMES = 8;
+
+    // Start an effect by hand (level-up bursts). Battle events start the rest.
+    void playEffect(const Combatant* who, const std::string& sheet, bool flip = false);
+    const std::vector<Effect>& getEffects() const { return m_effects; }
+
     void reset();
     void onEvents(const std::vector<BattleSystem::BattleEvent>& events);
     void update(float deltaTime);
@@ -80,6 +99,7 @@ private:
     void addPopup(const Combatant* who, const std::string& text, uint32_t color);
 
     std::vector<Popup> m_popups;
+    std::vector<Effect> m_effects;
     std::unordered_map<const Combatant*, Timers> m_timers;
     std::string m_banner;
     float m_bannerLeft = 0.0f;
@@ -90,5 +110,7 @@ private:
 struct StatusTag {
     const char* text;
     uint32_t color;
+    // File under assets/ui/ (without .png) holding the icon.
+    const char* icon;
 };
 StatusTag statusTagFor(StatusEffect::Type type);

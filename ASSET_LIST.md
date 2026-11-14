@@ -1,23 +1,37 @@
 # Cyber Rayne — Master Asset List
 
-Tracks generated sources, runtime assets, and remaining art. Updated 2026-11-10
+Tracks generated sources, runtime assets, and remaining art. Updated 2026-11-14
 against the repository, asset validator, item catalog, and ability registry.
 [ASSET_SPEC.md](ASSET_SPEC.md) defines runtime dimensions and preparation rules.
 
 **Completed:** 17 approved base sprites and 22 animation sheets are generated,
 conformed, and integrated. Their originals and exact prompts are in
 [CyberRayne/Raw/](CyberRayne/Raw/MANIFEST.md) and
-[Raw/sheets/](CyberRayne/Raw/sheets/README.md). All **40 runtime image files** pass
-`python3 CyberRayne/tools/validate_assets.py` (39 character/sheet assets + font).
+[Raw/sheets/](CyberRayne/Raw/sheets/README.md). All **43 runtime image files** pass
+`python3 CyberRayne/tools/validate_assets.py` (39 character/sheet assets + 3 backgrounds + font).
 Animation timing, facing and visual polish still need manual playtesting.
 
-**New raw art:** 9 item/story and equipment icons are saved with exact prompts.
-See the [icon manifest](CyberRayne/Raw/ICON_MANIFEST.md). These originals still
-need conversion to 32x32 and runtime integration.
+**New raw art:** 9 item/story and equipment icons, 12 party ability icons, and 8
+status icons are saved with exact prompts. See the
+[item/equipment manifest](CyberRayne/Raw/ICON_MANIFEST.md),
+[ability manifest](CyberRayne/Raw/spells/README.md), and
+[status manifest](CyberRayne/Raw/ui/README.md). All 29 originals still need
+small-size conformance and runtime integration.
+
+**Raw VFX:** All 12 listed effects now have eight-frame source sheets (96 frames)
+and exact prompts in the [VFX manifest](CyberRayne/Raw/vfx/README.md).
+Frame extraction, alignment, timing review and runtime integration remain.
+
+**District backgrounds:** 3 battle scenes are conformed to 960x540 and integrated
+through `BattleScene::drawBackdropArt`, with a 46.5% source ground line aligned to
+the battlefield. Originals and prompts remain in the
+[background manifest](CyberRayne/Raw/backgrounds/README.md). The procedural skyline
+remains the fallback and the title/character-select backdrop.
 
 | Status | Meaning |
 | --- | --- |
-| **[IN GAME]** | Runtime file exists, is used by the game, and passed the asset validator. |
+| **[IN GAME]** | Runtime file exists and is wired into the game; images passed the image asset validator. Audio playback is user-confirmed. |
+| **[READY]** | File exists at its intended runtime path; hookup remains. |
 | **[RAW]** | Generated original exists in `CyberRayne/Raw/`; conversion/integration remains. |
 | **[MISSING]** | Planned art has no generated source or runtime file yet. |
 | **[COVERED]** | Existing code or another asset supplies the visual; no separate image required. |
@@ -229,14 +243,14 @@ All seven map NPCs have distinct approved designs.
 
 ### Optional UI art and background replacements
 
-The current menus, overlays and per-district battle backdrops are drawn from
-code. Background artwork, if commissioned, belongs in `assets/backgrounds/`.
+Menus and overlays are drawn from code. District battle paintings are integrated
+from `assets/backgrounds/`; their source links below lead to preserved originals.
 | Asset | Status | Notes |
 |-------|--------|-------|
 | battle_background.png | [COVERED] | Procedural battle backdrop in BattleScene; no generic image required |
-| battle_background_alley.png | [DEFERRED] | Neon Alley battle bg |
-| battle_background_plaza.png | [DEFERRED] | Corporate Plaza battle bg |
-| battle_background_central.png | [DEFERRED] | Neo-Kyoto Central battle bg |
+| [battle_background_alley.png](CyberRayne/Raw/backgrounds/battle_background_alley.png) | [IN GAME] | Neon Alley: shuttered storefronts, cables and magenta reflections |
+| [battle_background_plaza.png](CyberRayne/Raw/backgrounds/battle_background_plaza.png) | [IN GAME] | Corporate Plaza: glass/chrome headquarters and cyan-lit forecourt |
+| [battle_background_central.png](CyberRayne/Raw/backgrounds/battle_background_central.png) | [IN GAME] | Neo-Kyoto Central: warm shops, transit walkway and violet skyline |
 | dialogue_box.png | [COVERED] | StoryHud and Theme draw dialogue panels |
 | pause_overlay.png | [COVERED] | PauseMenu and Theme draw the pause overlay |
 | game_over.png | [COVERED] | StoryHud draws the game-over card |
@@ -246,11 +260,14 @@ code. Background artwork, if commissioned, belongs in `assets/backgrounds/`.
 | ~~mp_bar.png~~ | [CUT] | Runtime colored geometry |
 | ~~atb_bar.png~~ | [CUT] | Runtime colored geometry |
 | ~~xp_bar.png~~ | [CUT] | Runtime colored geometry |
-| status_poison.png | [DEFERRED] | Poison status icon |
-| status_regen.png | [DEFERRED] | Regen status icon |
-| status_stun.png | [DEFERRED] | Stun status icon |
-| status_buff.png | [DEFERRED] | Attack buff icon |
-| status_debuff.png | [DEFERRED] | Defense debuff icon |
+| [status_poison.png](CyberRayne/Raw/ui/status_poison.png) | [RAW] | POISON: damage over time |
+| [status_regen.png](CyberRayne/Raw/ui/status_regen.png) | [RAW] | REGEN: healing over time |
+| [status_stun.png](CyberRayne/Raw/ui/status_stun.png) | [RAW] | STUN: temporarily unable to act |
+| [status_buff.png](CyberRayne/Raw/ui/status_buff.png) | [RAW] | ATTACK_UP: increased attack damage |
+| [status_debuff.png](CyberRayne/Raw/ui/status_debuff.png) | [RAW] | DEFENSE_DOWN: reduced defense |
+| [status_defense_up.png](CyberRayne/Raw/ui/status_defense_up.png) | [RAW] | DEFENSE_UP: increased defense |
+| [status_attack_down.png](CyberRayne/Raw/ui/status_attack_down.png) | [RAW] | ATTACK_DOWN: reduced attack damage |
+| [status_slow.png](CyberRayne/Raw/ui/status_slow.png) | [RAW] | SLOW: reduced ATB fill speed |
 | minimap.png | [DEFERRED] | Minimap frame |
 | ~~minimap_player.png~~ | [CUT] | Colored quad, push-constant color |
 | ~~minimap_npc.png~~ | [CUT] | Colored quad |
@@ -291,23 +308,25 @@ and runtime integration are separate steps. Catalog icons use stable item IDs fr
 
 ### Current party abilities
 
-Proposed image filenames match the IDs in `AbilityRegistry.cpp`. No icon loader is
-wired yet. These names replace the old generic spell list for the current classes.
+All 12 raw icons are generated; filenames match the IDs in `AbilityRegistry.cpp`.
+No icon loader is wired yet. These names replace the old generic spell list for the
+current classes. Sources, exact prompts, and validation details are indexed in the
+[ability manifest](CyberRayne/Raw/spells/README.md).
 
 | Asset | Status | Notes |
 | --- | --- | --- |
-| solo_suppressing_fire.png | [MISSING] | Suppressing Fire: damage to all enemies |
-| solo_guard_protocol.png | [MISSING] | Guard Protocol: ally defense buff |
-| solo_adrenal_surge.png | [MISSING] | Adrenal Surge: self attack buff |
-| solo_executioner.png | [MISSING] | Executioner: heavy single-target strike |
-| net_ice_breaker.png | [MISSING] | Ice Breaker: tech damage to one target |
-| net_patch.png | [MISSING] | Patch: heal an ally |
-| net_system_shock.png | [MISSING] | System Shock: area tech damage and stun |
-| net_corrupt.png | [MISSING] | Corrupt: target defense debuff |
-| inf_backstab.png | [MISSING] | Backstab: single-target strike |
-| inf_neurotoxin.png | [MISSING] | Neurotoxin: poison |
-| inf_smoke_screen.png | [MISSING] | Smoke Screen: slows enemies |
-| inf_killswitch.png | [MISSING] | Killswitch: heavy single-target strike |
+| [solo_suppressing_fire.png](CyberRayne/Raw/spells/solo_suppressing_fire.png) | [RAW] | Suppressing Fire: damage to all enemies |
+| [solo_guard_protocol.png](CyberRayne/Raw/spells/solo_guard_protocol.png) | [RAW] | Guard Protocol: ally defense buff |
+| [solo_adrenal_surge.png](CyberRayne/Raw/spells/solo_adrenal_surge.png) | [RAW] | Adrenal Surge: self attack buff |
+| [solo_executioner.png](CyberRayne/Raw/spells/solo_executioner.png) | [RAW] | Executioner: heavy single-target strike |
+| [net_ice_breaker.png](CyberRayne/Raw/spells/net_ice_breaker.png) | [RAW] | Ice Breaker: tech damage to one target |
+| [net_patch.png](CyberRayne/Raw/spells/net_patch.png) | [RAW] | Patch: heal an ally |
+| [net_system_shock.png](CyberRayne/Raw/spells/net_system_shock.png) | [RAW] | System Shock: area tech damage and stun |
+| [net_corrupt.png](CyberRayne/Raw/spells/net_corrupt.png) | [RAW] | Corrupt: target defense debuff |
+| [inf_backstab.png](CyberRayne/Raw/spells/inf_backstab.png) | [RAW] | Backstab: single-target strike |
+| [inf_neurotoxin.png](CyberRayne/Raw/spells/inf_neurotoxin.png) | [RAW] | Neurotoxin: poison |
+| [inf_smoke_screen.png](CyberRayne/Raw/spells/inf_smoke_screen.png) | [RAW] | Smoke Screen: slows enemies |
+| [inf_killswitch.png](CyberRayne/Raw/spells/inf_killswitch.png) | [RAW] | Killswitch: heavy single-target strike |
 
 ### Deferred item concepts (not current catalog IDs)
 | Asset | Status | Notes |
@@ -395,11 +414,14 @@ These are visual wishlist ideas, not additional items in the current catalog.
 
 ## 9. Audio (`assets/audio/`)
 
-Rewritten 2026-11-10 to match the vertical slice as it actually plays. The earlier
-list dated from the fantasy prototype (fire and ice spells, a final boss) and is
-replaced. Nothing here exists yet; `AudioManager` is still a stub until phase 12.
+Updated 2026-11-11: real miniaudio playback is wired and the user reports audio
+working. All 41 starter files exist (9 music tracks and 32 effects), generated by
+`tools/generate_audio.py`. Music follows game state and effects follow UI/world/battle
+events. `ui_equip.wav` exists but its equipment-menu hookup remains pending.
+Composer replacements, Settings volume controls, level balancing and loop listening
+checks remain tracked in AGENTS.md; Phase 12 is still in progress.
 
-**Formats (proposed, to confirm in phase 12):**
+**Current formats and replacement guidance:**
 - Music: `.ogg`, stereo, 44.1 kHz. Tracks marked *loop* must loop cleanly from end to
   start with no gap or click.
 - Sound effects: `.wav`, mono, 44.1 kHz, 16-bit. Trim silence from the start so the
@@ -408,23 +430,23 @@ replaced. Nothing here exists yet; `AudioManager` is still a stub until phase 12
 
 Music lives in `assets/audio/music/`, sound effects in `assets/audio/sfx/`.
 
-### Music (9 tracks; composer)
+### Music (9 starter tracks; composer replacements pending)
 
 | File | Status | Where it plays |
 |------|--------|----------------|
-| title.ogg | [MISSING] | Title screen and character select. *Loop.* The main theme. |
-| central.ogg | [MISSING] | Exploring Neo-Kyoto Central. *Loop.* Home district; calm. |
-| alley.ogg | [MISSING] | Exploring Neon Alley. *Loop.* Seedier, tenser. |
-| plaza.ogg | [MISSING] | Exploring Corporate Plaza. *Loop.* Cold, corporate. |
-| battle.ogg | [MISSING] | Ordinary fights. *Loop.* |
-| boss.ogg | [MISSING] | The two story fights (thugs, Enforcer). *Loop.* |
-| victory.ogg | [MISSING] | Victory card. Short fanfare, then may loop quietly. |
-| game_over.ogg | [MISSING] | Game-over card. Short, plays once. |
-| ending.ogg | [MISSING] | Ending card after "The Truth". Plays once or loops. |
+| [title.ogg](CyberRayne/assets/audio/music/title.ogg) | [IN GAME] | Title screen and character select. *Loop.* The main theme. |
+| [central.ogg](CyberRayne/assets/audio/music/central.ogg) | [IN GAME] | Exploring Neo-Kyoto Central. *Loop.* Home district; calm. |
+| [alley.ogg](CyberRayne/assets/audio/music/alley.ogg) | [IN GAME] | Exploring Neon Alley. *Loop.* Seedier, tenser. |
+| [plaza.ogg](CyberRayne/assets/audio/music/plaza.ogg) | [IN GAME] | Exploring Corporate Plaza. *Loop.* Cold, corporate. |
+| [battle.ogg](CyberRayne/assets/audio/music/battle.ogg) | [IN GAME] | Ordinary fights. *Loop.* |
+| [boss.ogg](CyberRayne/assets/audio/music/boss.ogg) | [IN GAME] | The two story fights (thugs, Enforcer). *Loop.* |
+| [victory.ogg](CyberRayne/assets/audio/music/victory.ogg) | [IN GAME] | Victory card. Currently plays once. |
+| [game_over.ogg](CyberRayne/assets/audio/music/game_over.ogg) | [IN GAME] | Game-over card. Short, plays once. |
+| [ending.ogg](CyberRayne/assets/audio/music/ending.ogg) | [IN GAME] | Ending card after "The Truth". Currently loops. |
 
-If the composer's time is short, the order of importance is: title, battle, central,
-victory, then the rest. `alley` and `plaza` can share `central` at first, and `boss`
-can share `battle`.
+All nine tracks currently have their own files. Fallbacks remain configured for
+alley/plaza to central, boss to battle, and ending to title if replacements are absent.
+Composer replacement priority: title, battle, central, victory, then the rest.
 
 ### Sound effects (32; generated)
 
@@ -432,53 +454,53 @@ can share `battle`.
 
 | File | Status | When |
 |------|--------|------|
-| ui_move.wav | [MISSING] | Cursor moves in any menu. Very short tick; heard constantly. |
-| ui_confirm.wav | [MISSING] | A choice is confirmed. |
-| ui_cancel.wav | [MISSING] | Backing out of a menu. |
-| ui_error.wav | [MISSING] | Something refused: cannot afford an ability, item cannot be used. |
-| ui_pause.wav | [MISSING] | Pause menu opens. |
-| ui_save.wav | [MISSING] | Game saved. |
-| ui_equip.wav | [MISSING] | Gear changed in the equipment screen. |
+| [ui_move.wav](CyberRayne/assets/audio/sfx/ui_move.wav) | [IN GAME] | Cursor moves in any menu. Very short tick; heard constantly. |
+| [ui_confirm.wav](CyberRayne/assets/audio/sfx/ui_confirm.wav) | [IN GAME] | A choice is confirmed. |
+| [ui_cancel.wav](CyberRayne/assets/audio/sfx/ui_cancel.wav) | [IN GAME] | Backing out of a menu. |
+| [ui_error.wav](CyberRayne/assets/audio/sfx/ui_error.wav) | [IN GAME] | Something refused: cannot afford an ability, item cannot be used. |
+| [ui_pause.wav](CyberRayne/assets/audio/sfx/ui_pause.wav) | [IN GAME] | Pause menu opens. |
+| [ui_save.wav](CyberRayne/assets/audio/sfx/ui_save.wav) | [IN GAME] | Game saved. |
+| [ui_equip.wav](CyberRayne/assets/audio/sfx/ui_equip.wav) | [READY] | Generated file present; equipment-menu hookup pending. |
 
 **Exploring**
 
 | File | Status | When |
 |------|--------|------|
-| step.wav | [MISSING] | Footstep, one per tile walked. Soft; heard constantly. |
-| travel.wav | [MISSING] | Moving between districts. |
-| blocked.wav | [MISSING] | Turned back from a locked district. |
-| talk_blip.wav | [MISSING] | Dialogue advances to the next line. |
-| quest_new.wav | [MISSING] | A quest begins. |
-| quest_done.wav | [MISSING] | A quest is completed. |
-| rest.wav | [MISSING] | The Street Vendor's meal restores the party. |
-| encounter.wav | [MISSING] | A fight begins (the swoosh into battle). |
+| [step.wav](CyberRayne/assets/audio/sfx/step.wav) | [IN GAME] | Footstep, one per tile walked. Soft; heard constantly. |
+| [travel.wav](CyberRayne/assets/audio/sfx/travel.wav) | [IN GAME] | Moving between districts. |
+| [blocked.wav](CyberRayne/assets/audio/sfx/blocked.wav) | [IN GAME] | Turned back from a locked district. |
+| [talk_blip.wav](CyberRayne/assets/audio/sfx/talk_blip.wav) | [IN GAME] | Dialogue advances to the next line. |
+| [quest_new.wav](CyberRayne/assets/audio/sfx/quest_new.wav) | [IN GAME] | A quest begins. |
+| [quest_done.wav](CyberRayne/assets/audio/sfx/quest_done.wav) | [IN GAME] | A quest is completed. |
+| [rest.wav](CyberRayne/assets/audio/sfx/rest.wav) | [IN GAME] | The Street Vendor's meal restores the party. |
+| [encounter.wav](CyberRayne/assets/audio/sfx/encounter.wav) | [IN GAME] | A fight begins (the swoosh into battle). |
 
 **Battle: general**
 
 | File | Status | When |
 |------|--------|------|
-| turn_ready.wav | [MISSING] | A party member's turn gauge fills. |
-| guard.wav | [MISSING] | Someone defends. |
-| heal.wav | [MISSING] | HP restored: Stim Pack, Trauma Kit, Patch, regen. |
-| revive.wav | [MISSING] | Defib Patch brings someone back. |
-| buff.wav | [MISSING] | A helpful effect lands: Guard Protocol, Adrenal Surge, Smoke Screen, Servo Overdrive. |
-| debuff.wav | [MISSING] | A harmful effect lands: Corrupt, Lockout. |
-| poison.wav | [MISSING] | Poison ticks (Neurotoxin). Short and quiet; it repeats. |
-| stun.wav | [MISSING] | Someone is stunned (System Shock, Taser Burst). |
-| enemy_down.wav | [MISSING] | An enemy is defeated and fades out. |
-| ally_down.wav | [MISSING] | A party member falls. |
-| flee.wav | [MISSING] | The party escapes. |
-| level_up.wav | [MISSING] | Level up on the victory card. Short jingle. |
+| [turn_ready.wav](CyberRayne/assets/audio/sfx/turn_ready.wav) | [IN GAME] | A party member's turn gauge fills. |
+| [guard.wav](CyberRayne/assets/audio/sfx/guard.wav) | [IN GAME] | Someone defends. |
+| [heal.wav](CyberRayne/assets/audio/sfx/heal.wav) | [IN GAME] | HP restored: Stim Pack, Trauma Kit, Patch, regen. |
+| [revive.wav](CyberRayne/assets/audio/sfx/revive.wav) | [IN GAME] | Defib Patch brings someone back. |
+| [buff.wav](CyberRayne/assets/audio/sfx/buff.wav) | [IN GAME] | A helpful effect lands: Guard Protocol, Adrenal Surge, Smoke Screen, Servo Overdrive. |
+| [debuff.wav](CyberRayne/assets/audio/sfx/debuff.wav) | [IN GAME] | A harmful effect lands: Corrupt, Lockout. |
+| [poison.wav](CyberRayne/assets/audio/sfx/poison.wav) | [IN GAME] | Poison ticks (Neurotoxin). Short and quiet; it repeats. |
+| [stun.wav](CyberRayne/assets/audio/sfx/stun.wav) | [IN GAME] | Someone is stunned (System Shock, Taser Burst). |
+| [enemy_down.wav](CyberRayne/assets/audio/sfx/enemy_down.wav) | [IN GAME] | An enemy is defeated and fades out. |
+| [ally_down.wav](CyberRayne/assets/audio/sfx/ally_down.wav) | [IN GAME] | A party member falls. |
+| [flee.wav](CyberRayne/assets/audio/sfx/flee.wav) | [IN GAME] | The party escapes. |
+| [level_up.wav](CyberRayne/assets/audio/sfx/level_up.wav) | [IN GAME] | Level up on the victory card. Short jingle. |
 
 **Battle: attacks**
 
 | File | Status | When |
 |------|--------|------|
-| hit_blunt.wav | [MISSING] | Heavy physical hit: Street Thug's pipe, Riot Slam, Combat Cyborg. |
-| hit_blade.wav | [MISSING] | Blades: the Infiltrator and Vash (Backstab, Shiv, Killswitch). |
-| gunshot.wav | [MISSING] | Guns: the Solo (attack, Suppressing Fire, Executioner). |
-| hack.wav | [MISSING] | Digital attacks: the Netrunner and Cyph (Ice Breaker), Black ICE (ICE Spike). |
-| zap.wav | [MISSING] | Electric and energy: Security Drone, System Shock, Taser Burst. |
+| [hit_blunt.wav](CyberRayne/assets/audio/sfx/hit_blunt.wav) | [IN GAME] | Heavy physical hit: Street Thug's pipe, Riot Slam, Combat Cyborg. |
+| [hit_blade.wav](CyberRayne/assets/audio/sfx/hit_blade.wav) | [IN GAME] | Blades: the Infiltrator and Vash (Backstab, Shiv, Killswitch). |
+| [gunshot.wav](CyberRayne/assets/audio/sfx/gunshot.wav) | [IN GAME] | Guns: the Solo (attack, Suppressing Fire, Executioner). |
+| [hack.wav](CyberRayne/assets/audio/sfx/hack.wav) | [IN GAME] | Digital attacks: the Netrunner and Cyph (Ice Breaker), Black ICE (ICE Spike). |
+| [zap.wav](CyberRayne/assets/audio/sfx/zap.wav) | [IN GAME] | Electric and energy: Security Drone, System Shock, Taser Burst. |
 
 One sound per kind of attack rather than one per ability keeps the list short. If
 there is time for more, the first to split out are each class's strongest ability
@@ -502,20 +524,22 @@ there is time for more, the first to split out are each class's strongest abilit
 
 ## 11. Particle Effects / VFX (`assets/vfx/`)
 
+All sheets are raw 4×2 source layouts. See the [selected sources and preparation notes](CyberRayne/Raw/vfx/README.md).
+
 | Asset | Status | Notes |
 |-------|--------|-------|
-| vfx_fireball.png | [DEFERRED] | Fireball projectile sprite |
-| vfx_ice_shard.png | [DEFERRED] | Ice projectile sprite |
-| vfx_lightning.png | [DEFERRED] | Lightning bolt sprite |
-| vfx_heal_glow.png | [DEFERRED] | Healing glow particle |
-| vfx_hit_spark.png | [DEFERRED] | Impact spark particle |
-| vfx_explosion.png | [DEFERRED] | Explosion particle |
-| vfx_levelup.png | [DEFERRED] | Level up burst effect |
-| vfx_hack_stream.png | [DEFERRED] | Data stream visual for hacking |
-| vfx_poison.png | [DEFERRED] | Poison cloud particle |
-| vfx_dust.png | [DEFERRED] | Ambient dust particles |
-| vfx_rain.png | [DEFERRED] | Rain particle spritesheet |
-| vfx_neon_glow.png | [DEFERRED] | Neon glow overlay |
+| vfx_fireball.png | [RAW] | Fireball projectile sprite; [8-frame source](CyberRayne/Raw/vfx/vfx_fireball.png) |
+| vfx_ice_shard.png | [RAW] | Ice projectile sprite; [8-frame source](CyberRayne/Raw/vfx/vfx_ice_shard-v2.png) |
+| vfx_lightning.png | [RAW] | Lightning bolt sprite; [8-frame source](CyberRayne/Raw/vfx/vfx_lightning.png) |
+| vfx_heal_glow.png | [RAW] | Healing glow particle; [8-frame source](CyberRayne/Raw/vfx/vfx_heal_glow.png) |
+| vfx_hit_spark.png | [RAW] | Impact spark particle; [8-frame source](CyberRayne/Raw/vfx/vfx_hit_spark.png) |
+| vfx_explosion.png | [RAW] | Explosion particle; [8-frame source](CyberRayne/Raw/vfx/vfx_explosion.png) |
+| vfx_levelup.png | [RAW] | Level up burst effect; [8-frame source](CyberRayne/Raw/vfx/vfx_levelup-v2.png) |
+| vfx_hack_stream.png | [RAW] | Data stream visual for hacking; [8-frame source](CyberRayne/Raw/vfx/vfx_hack_stream.png) |
+| vfx_poison.png | [RAW] | Poison cloud particle; [8-frame source](CyberRayne/Raw/vfx/vfx_poison.png) |
+| vfx_dust.png | [RAW] | Ambient dust particles; [8-frame source](CyberRayne/Raw/vfx/vfx_dust.png) |
+| vfx_rain.png | [RAW] | Rain particle spritesheet; [8-frame source](CyberRayne/Raw/vfx/vfx_rain.png) |
+| vfx_neon_glow.png | [RAW] | Neon glow overlay; [8-frame source](CyberRayne/Raw/vfx/vfx_neon_glow-v2.png) |
 
 ---
 
@@ -540,12 +564,15 @@ there is time for more, the first to split out are each class's strongest abilit
 | Enemies | 5 base sprites + 5 battle sheets integrated |
 | NPCs | 7 base sprites + 7 idle/talk sheets integrated |
 | Font | 1 existing runtime atlas |
-| Runtime image validation | 40 files pass; zero failures |
-| Tiles, menus, overlays, battle skyline | Existing procedural/code-drawn visuals |
+| Runtime image validation | 43 files pass; zero failures |
+| Tiles, menus, overlays, fallback skyline | Existing procedural/code-drawn visuals |
 | Item/story and equipment icons | 9 raw originals generated; conformance and wiring remain |
-| Party ability icons | 12 planned sources using current ability IDs |
-| Optional art | District backdrops, status icons, VFX, extra cast and vehicles retained above |
-| Audio | Separate phase; backend/format work remains |
+| Party ability icons | 12 raw originals generated using current ability IDs; conformance and wiring remain |
+| District battle backgrounds | 3 paintings conformed to 960x540 and integrated |
+| Status icons | 8 raw originals cover every current StatusEffect type; conformance and wiring remain |
+| VFX | 12 raw eight-frame sheets (96 frames); conformance and wiring remain |
+| Optional art | Cutscenes, extra cast and vehicles retained above |
+| Audio | 9 music + 32 SFX files exist; 40 wired, ui_equip hookup pending; playback user-confirmed |
 
 The old "195 assets remaining" total mixed slice requirements with speculative
 full-game ideas and counted images already replaced by code. It is retired.

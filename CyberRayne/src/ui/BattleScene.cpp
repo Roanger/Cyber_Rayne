@@ -21,9 +21,15 @@ constexpr int FALLBACK_H = 128;
 constexpr int SHEET_COLS = 4;
 constexpr int SHEET_ROWS = 4;
 constexpr float IDLE_FRAME_TIME = 0.24f;
+// Effect sheets: eight frames, four across.
+constexpr int VFX_COLS = 4;
+constexpr int VFX_ROWS = 2;
 
 // Where the floor meets the skyline, as a fraction of the scene height.
 constexpr float HORIZON = 0.40f;
+// How far down a painted battle backdrop its ground line is, as a fraction
+// of the image height. The generated art puts it at 46-48%.
+constexpr float BACKDROP_GROUND_LINE = 0.465f;
 
 struct Palette {
     uint32_t skyTop;
@@ -72,10 +78,11 @@ void drawBar(VulkanRenderer* renderer, int x, int y, int w, int h, float fractio
     Theme::fillRect(renderer, x, y, static_cast<int>(static_cast<float>(w) * fraction), h, color);
 }
 
-// Row of status tags, centred on centreX. Returns nothing; draws nothing if
-// the combatant has no active effects.
-void drawStatusTags(VulkanRenderer* renderer, TextRenderer* text, const Combatant* who,
-                    int centreX, int y) {
+// Row of status icons, centred on centreX. Draws nothing if the combatant
+// has no active effects. An effect with no icon file falls back to its
+// short text tag.
+void drawStatusTags(VulkanRenderer* renderer, TextRenderer* text, SpriteLibrary* sprites,
+                    const Combatant* who, int centreX, int y, int scale) {
     std::vector<StatusTag> tags;
     for (const auto& effect : who->getStatusEffects()) {
         if (effect && !effect->isExpired()) {
@@ -84,18 +91,28 @@ void drawStatusTags(VulkanRenderer* renderer, TextRenderer* text, const Combatan
     }
     if (tags.empty()) return;
 
+    const int iconSize = 16 * std::max(1, scale);
     const int gap = 6;
+    std::vector<int> widths;
     int total = -gap;
     for (const StatusTag& tag : tags) {
-        total += text->measureText(tag.text, 1) + 8 + gap;
+        const bool hasIcon = sprites->icon("ui", tag.icon).valid();
+        widths.push_back(hasIcon ? iconSize : text->measureText(tag.text, 1) + 8);
+        total += widths.back() + gap;
     }
     int x = centreX - total / 2;
-    for (const StatusTag& tag : tags) {
-        const int w = text->measureText(tag.text, 1) + 8;
-        Theme::fillRect(renderer, x, y, w, 14, Theme::BASE, 0.9f);
-        Theme::fillRect(renderer, x, y + 12, w, 2, tag.color);
-        text->renderText(renderer, tag.text, x + 4, y + 2, 1, tag.color);
-        x += w + gap;
+    for (std::size_t i = 0; i < tags.size(); ++i) {
+        const StatusTag& tag = tags[i];
+        const Sprite& icon = sprites->icon("ui", tag.icon);
+        if (icon.valid()) {
+            Theme::fillRect(renderer, x - 2, y - 2, iconSize + 4, iconSize + 4, Theme::BASE, 0.75f);
+            sprites->draw(icon, x, y, iconSize, iconSize);
+        } else {
+            Theme::fillRect(renderer, x, y, widths[i], 14, Theme::BASE, 0.9f);
+            Theme::fillRect(renderer, x, y + 12, widths[i], 2, tag.color);
+            text->renderText(renderer, tag.text, x + 4, y + 2, 1, tag.color);
+        }
+        x += widths[i] + gap;
     }
 }
 
@@ -181,6 +198,43 @@ void BattleScene::drawBackdrop(VulkanRenderer* renderer, int screenW, int sceneH
     }
 }
 
+bool BattleScene::drawBackdropArt(VulkanRenderer* renderer, SpriteLibrary* sprites,
+                                  int screenW, int sceneH) const {
+    // assets/backgrounds/battle_background_<district>.png
+    const char* district = "central";
+    if (m_mapName == "Neon Alley") district = "alley";
+    else if (m_mapName == "Corporate Plaza") district = "plaza";
+    const Sprite& art = sprites->sheet("backgrounds", "battle_background", district, 1, 1);
+    if (!art.valid() || art.width <= 0 || art.height <= 0) {
+        return false;
+    }
+
+    // Scale the painting so that it covers the scene and its ground line
+    // sits on the scene's horizon, where the fighters' floor begins. The
+    // scene is wider and shorter than the painting, so some sky is cropped.
+    const float imageW = static_cast<float>(art.width);
+    const float imageH = static_cast<float>(art.height);
+    const float horizonY = static_cast<float>(sceneH) * HORIZON;
+    const float aboveGround = imageH * BACKDROP_GROUND_LINE;
+    const float belowGround = imageH - aboveGround;
+    const float scale = std::max({static_cast<float>(screenW) / imageW,
+                                  horizonY / aboveGround,
+                                  (static_cast<float>(sceneH) - horizonY) / belowGround});
+
+    // The part of the painting that lands on screen, as texture coordinates.
+    const float shownW = static_cast<float>(screenW) / scale;
+    const float shownH = static_cast<float>(sceneH) / scale;
+    const float left = (imageW - shownW) * 0.5f;
+    const float top = aboveGround - horizonY / scale;
+    renderer->renderSpritePixelsWithTexture(0, 0, screenW, sceneH, art.texture,
+                                            1.0f, 1.0f, 1.0f, 1.0f,
+                                            left / imageW, top / imageH,
+                                            (left + shownW) / imageW, (top + shownH) / imageH);
+    // A light veil keeps the fighters and their labels in front of the scenery.
+    Theme::fillRect(renderer, 0, 0, screenW, sceneH, Theme::BASE, 0.18f);
+    return true;
+}
+
 BattleScene::Placement BattleScene::place(bool enemySide, std::size_t index, std::size_t count,
                                           int frameW, int frameH, int screenW, int sceneH,
                                           int scale) const {
@@ -212,9 +266,14 @@ void BattleScene::render(VulkanRenderer* renderer, TextRenderer* text, SpriteLib
     const int screenH = static_cast<int>(renderer->getSwapchainExtent().height);
     const int sceneH = screenH - BattleLayout::PANEL_HEIGHT;
     // Whole-number scaling keeps pixel art crisp.
-    const int scale = std::max(1, static_cast<int>(std::lround(static_cast<float>(screenH) / 540.0f)));
+    // Sized from whichever of width and height is tighter, so a tall narrow
+    // window does not get figures too big to stand side by side.
+    const int scale = std::max(1, static_cast<int>(std::lround(
+        std::min(static_cast<float>(screenH) / 540.0f, static_cast<float>(screenW) / 640.0f))));
 
-    drawBackdrop(renderer, screenW, sceneH, m_mapName);
+    if (!drawBackdropArt(renderer, sprites, screenW, sceneH)) {
+        drawBackdrop(renderer, screenW, sceneH, m_mapName);
+    }
 
     struct Figure {
         const Combatant* who;
@@ -315,6 +374,25 @@ void BattleScene::render(VulkanRenderer* renderer, TextRenderer* text, SpriteLib
         }
     }
 
+    // Effect animations play over the figures.
+    for (const BattleFx::Effect& effect : m_fx.getEffects()) {
+        auto it = std::find_if(figures.begin(), figures.end(),
+                               [&](const Figure& f) { return f.who == effect.who; });
+        if (it == figures.end()) continue;
+        const Sprite& sheet = sprites->icon("vfx", effect.sheet, VFX_COLS, VFX_ROWS);
+        const int frame = effect.frame();
+        if (!sheet.valid() || frame < 0 || frame >= BattleFx::EFFECT_FRAMES) continue;
+        // Effects are drawn at twice the sprites' pixel size, so a spark is
+        // large enough to read against a character.
+        const int size = sheet.frameWidth() * scale * 2;
+        const int left = it->at.feetX - size / 2;
+        // Rings and bursts sit on the ground at the feet; hits land on the body.
+        const int top = effect.onGround ? it->at.feetY - size + size / 6
+                                        : it->at.feetY - it->at.height / 2 - size / 2;
+        sprites->draw(sheet, left, top, size, size, 1.0f, 1.0f, 1.0f, 1.0f,
+                      frame % VFX_COLS, frame / VFX_COLS, effect.flip);
+    }
+
     // Labels go on after every sprite so nothing covers them.
     for (const Figure& figure : figures) {
         const Combatant* who = figure.who;
@@ -332,7 +410,7 @@ void BattleScene::render(VulkanRenderer* renderer, TextRenderer* text, SpriteLib
                     Theme::LOVE);
         }
         if (standing) {
-            drawStatusTags(renderer, text, who, figure.at.feetX, figure.at.feetY + 8);
+            drawStatusTags(renderer, text, sprites, who, figure.at.feetX, figure.at.feetY + 8, scale);
         }
 
         const int bob = static_cast<int>(std::sin(m_time * 6.0f) * 4.0f);

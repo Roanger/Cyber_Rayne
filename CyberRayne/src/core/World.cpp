@@ -1,4 +1,5 @@
 #ifndef NO_VULKAN
+#include <cstdint>
 #include "../../include/ui/SpriteLibrary.h"
 #include "../../include/ui/Theme.h"
 #include <cmath>
@@ -89,6 +90,35 @@ void World::render([[maybe_unused]] VulkanRenderer* renderer, [[maybe_unused]] S
     const int tileW = static_cast<int>(vp.tileWidth * 0.5f * static_cast<float>(screenW));
     const int tileH = static_cast<int>(vp.tileHeight * 0.5f * static_cast<float>(screenH));
 
+    // Neon signs throw a pulsing pool of light on the ground in front of them.
+    if (sprites) {
+        const Sprite& glow = sprites->icon("vfx", "vfx_neon_glow", 4, 2);
+        if (glow.valid()) {
+            const int firstX = std::max(0, static_cast<int>(std::floor(vp.startX)) - 1);
+            const int firstY = std::max(0, static_cast<int>(std::floor(vp.startY)) - 1);
+            const int lastX = std::min(m_currentMap->getWidth() - 1,
+                                       static_cast<int>(std::ceil(vp.startX + vp.widthTiles)) + 1);
+            const int lastY = std::min(m_currentMap->getHeight() - 1,
+                                       static_cast<int>(std::ceil(vp.startY + static_cast<float>(vp.heightTiles))) + 1);
+            for (int ty = firstY; ty <= lastY; ++ty) {
+                for (int tx = firstX; tx <= lastX; ++tx) {
+                    const Tile* tile = m_currentMap->getTile(tx, ty);
+                    if (!tile || tile->getType() != Tile::TileType::NEON) continue;
+                    float ndcX = 0.0f;
+                    float ndcY = 0.0f;
+                    m_currentMap->worldToNdc(vp, static_cast<float>(tx), static_cast<float>(ty), ndcX, ndcY);
+                    const int cx = static_cast<int>((ndcX + 1.0f) * 0.5f * static_cast<float>(screenW));
+                    const int cy = static_cast<int>((ndcY + 1.0f) * 0.5f * static_cast<float>(screenH));
+                    // Each sign pulses a little out of step with its neighbours.
+                    const int frame = static_cast<int>((animTime + static_cast<float>(tx * 3 + ty) * 0.21f) * 8.0f) % 8;
+                    const int size = tileW * 2;
+                    sprites->draw(glow, cx - size / 2, cy + tileH / 2 - size / 2, size, size,
+                                  1.0f, 1.0f, 1.0f, 0.8f, frame % 4, frame / 4);
+                }
+            }
+        }
+    }
+
     struct Figure {
         float worldY;
         int centreX;   // pixel centre of the tile
@@ -178,6 +208,39 @@ void World::render([[maybe_unused]] VulkanRenderer* renderer, [[maybe_unused]] S
             const int size = tileW * 7 / 10;
             Theme::fillRect(renderer, figure.centreX - size / 2, figure.centreY - size / 2, size, size,
                             figure.fallback);
+        }
+    }
+
+    // Weather, in front of everyone: rain in Neon Alley, drifting dust in
+    // Central. Each particle plays its eight frames, then starts again
+    // somewhere else. Positions come from a hash, so nothing is stored.
+    if (sprites) {
+        const std::string& district = m_currentMap->getName();
+        const bool rain = district == "Neon Alley";
+        const bool dust = district == "Neo-Kyoto Central";
+        if (rain || dust) {
+            const Sprite& sheet = sprites->icon("vfx", rain ? "vfx_rain" : "vfx_dust", 4, 2);
+            if (sheet.valid()) {
+                const int count = rain ? 44 : 7;
+                const float framesPerSecond = rain ? 15.0f : 5.0f;
+                const int size = tileW * (rain ? 2 : 2);
+                const float alpha = rain ? 0.85f : 0.45f;
+                auto hash = [](uint32_t v) {
+                    v ^= v >> 16; v *= 0x7feb352du; v ^= v >> 15; v *= 0x846ca68bu; v ^= v >> 16;
+                    return v;
+                };
+                for (int i = 0; i < count; ++i) {
+                    // Stagger the particles so they do not all land together.
+                    const float t = animTime * framesPerSecond + static_cast<float>(i) * 8.0f /
+                                    static_cast<float>(count) + static_cast<float>(hash(static_cast<uint32_t>(i)) % 8);
+                    const uint32_t cycle = static_cast<uint32_t>(t / 8.0f);
+                    const int frame = static_cast<int>(t) % 8;
+                    const uint32_t h = hash(static_cast<uint32_t>(i) * 7919u + cycle * 104729u);
+                    const int px = static_cast<int>(h % static_cast<uint32_t>(screenW + size)) - size;
+                    const int py = static_cast<int>((h >> 12) % static_cast<uint32_t>(screenH + size)) - size;
+                    sprites->draw(sheet, px, py, size, size, 1.0f, 1.0f, 1.0f, alpha, frame % 4, frame / 4);
+                }
+            }
         }
     }
 #endif

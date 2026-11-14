@@ -112,6 +112,22 @@ def fit_into(im: Image.Image, target: tuple[int, int]) -> Image.Image:
     return canvas
 
 
+def fill_frame(im: Image.Image, target: tuple[int, int]) -> Image.Image:
+    """Scale to cover the whole frame and crop the overhang, centred.
+
+    For backgrounds: fit_into would leave a transparent sliver when the source
+    is not exactly the target's shape, and a backdrop must have no holes.
+    """
+    tw, th = target
+    sw, sh = im.size
+    scale = max(tw / sw, th / sh)
+    new = (max(tw, round(sw * scale)), max(th, round(sh * scale)))
+    im = im.resize(new, Image.BOX)
+    left = (new[0] - tw) // 2
+    top = (new[1] - th) // 2
+    return im.crop((left, top, left + tw, top + th))
+
+
 def harden_alpha(im: Image.Image, threshold: int) -> Image.Image:
     """Force alpha to fully on or fully off.
 
@@ -171,11 +187,14 @@ def process(path: Path, spec, args) -> Path:
         im = trim_to_content(im)
 
     target = args.size or spec.size
-    im = fit_into(im, target)
+    if args.fill:
+        im = fill_frame(im.convert("RGB"), target)
+    else:
+        im = fit_into(im, target)
 
     if not args.keep_background:
         im = harden_alpha(im, args.alpha_threshold)
-    if not args.no_palette:
+    if not args.no_palette and not args.fill:
         im = snap_to_palette(im)
 
     outdir = Path(args.outdir) if args.outdir else path.parent
@@ -198,6 +217,9 @@ def main() -> int:
                     help="Use the rembg model instead of corner flood-fill.")
     ap.add_argument("--keep-background", action="store_true",
                     help="Skip cutout entirely. For backgrounds and UI panels.")
+    ap.add_argument("--fill", action="store_true",
+                    help="Cover the whole frame, cropping any overhang, and write "
+                         "an opaque image. For backgrounds; implies no cutout.")
     ap.add_argument("--no-palette", action="store_true",
                     help="Skip palette snapping. Use when source art is already on-palette.")
     ap.add_argument("--tolerance", type=int, default=32,
@@ -205,6 +227,8 @@ def main() -> int:
     ap.add_argument("--alpha-threshold", type=int, default=128,
                     help="Alpha at or above this becomes opaque (default 128).")
     args = ap.parse_args()
+    if args.fill:
+        args.keep_background = True
 
     spec = SPECS_BY_DIR[args.category]
     target = args.size or spec.size

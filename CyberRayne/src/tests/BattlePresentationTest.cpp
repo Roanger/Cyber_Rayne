@@ -1,11 +1,14 @@
 // What the battle screen is told about a fight (BattleSystem events), how
 // that becomes on-screen effects (BattleFx), and how art is found by name.
+#include <algorithm>
 #include "../../include/BattleSystem.h"
 #include "../../include/Enemy.h"
 #include "../../include/Party.h"
 #include "../../include/Player.h"
 #include "../../include/StatusEffect.h"
 #include "../../include/ui/BattleFx.h"
+#include "../../include/BattleSounds.h"
+#include "../../include/Ability.h"
 #include "../../include/ui/SpriteSlug.h"
 
 #include <cstdlib>
@@ -198,6 +201,98 @@ int main() {
         fx.update(BattleFx::ACTION_TIME + 0.01f);
         expect(fx.getAction(rayne).pose == BattleFx::Pose::IDLE && !fx.isBusy(), "and then ends");
         fx.reset();
+    }
+
+    // --- Effect animations -----------------------------------------------------
+    {
+        auto party = Party::createDefaultParty();
+        Player* rayne = party->getMember(0);
+        Enemy thug("Street Thug", 1);
+        Enemy drone("Security Drone", 1);
+        BattleFx fx;
+
+        fx.onEvents({{Event::Kind::ACTION, &thug, 0, "Attack"}, {Event::Kind::DAMAGE, rayne, 9, {}}});
+        expect(fx.getEffects().size() == 1 && fx.getEffects()[0].who == rayne &&
+               fx.getEffects()[0].sheet == "vfx_hit_spark" && !fx.getEffects()[0].flip,
+               "an enemy's hit sparks on its target, unmirrored");
+        fx.reset();
+
+        fx.onEvents({{Event::Kind::ACTION, rayne, 0, "Attack"}, {Event::Kind::DAMAGE, &thug, 9, {}}});
+        expect(fx.getEffects().size() == 1 && fx.getEffects()[0].flip, "the party's attacks are mirrored");
+        fx.reset();
+
+        fx.onEvents({{Event::Kind::ACTION, &drone, 0, "Attack"}, {Event::Kind::DAMAGE, rayne, 5, {}}});
+        expect(fx.getEffects()[0].sheet == "vfx_lightning", "a drone's attack is electric");
+        fx.reset();
+        fx.onEvents({{Event::Kind::ACTION, rayne, 0, "Executioner"}, {Event::Kind::DAMAGE, &thug, 40, {}}});
+        expect(fx.getEffects()[0].sheet == "vfx_explosion", "named abilities have their own effect");
+        fx.reset();
+        fx.onEvents({{Event::Kind::DAMAGE, rayne, 3, {}}});
+        expect(fx.getEffects()[0].sheet == "vfx_poison", "damage nobody dealt shows as poison");
+        fx.reset();
+        fx.onEvents({{Event::Kind::HEAL, rayne, 20, {}}});
+        expect(fx.getEffects()[0].sheet == "vfx_heal_glow" && fx.getEffects()[0].onGround,
+               "healing glows at the feet");
+
+        // An effect runs through its eight frames and then ends.
+        expect(fx.isBusy() && fx.getEffects()[0].frame() == 0, "an effect starts on its first frame");
+        fx.update(0.35f);
+        expect(fx.getEffects().size() == 1 && fx.getEffects()[0].frame() == 3, "and advances");
+        fx.update(5.0f);
+        expect(fx.getEffects().empty(), "and is removed when it finishes");
+    }
+
+    // --- Sounds ---------------------------------------------------------------
+    {
+        auto party = Party::createDefaultParty();
+        Player* rayne = party->getMember(0);
+        Enemy thug("Street Thug", 1);
+        Enemy drone("Security Drone", 1);
+        auto has = [](const std::vector<std::string>& sounds, const char* name) {
+            return std::find(sounds.begin(), sounds.end(), name) != sounds.end();
+        };
+
+        expect(attackSoundFor(&thug) == "hit_blunt" && attackSoundFor(&drone) == "zap",
+               "enemies attack with their own kind of sound");
+        expect(!attackSoundFor(rayne).empty(), "a party member's attack has a sound");
+
+        auto sounds = battleSoundsFor({{Event::Kind::ACTION, &thug, 0, "Attack"},
+                                       {Event::Kind::DAMAGE, rayne, 9, {}}});
+        expect(sounds.size() == 1 && sounds[0] == "hit_blunt", "an attack makes its hit sound, once");
+
+        sounds = battleSoundsFor({{Event::Kind::DAMAGE, rayne, 3, {}}});
+        expect(sounds.size() == 1 && sounds[0] == "poison", "damage nobody dealt is a status ticking");
+
+        sounds = battleSoundsFor({{Event::Kind::ACTION, rayne, 0, "Stim Pack"},
+                                  {Event::Kind::HEAL, rayne, 30, {}},
+                                  {Event::Kind::HEAL, &thug, 30, {}}});
+        expect(sounds.size() == 1 && sounds[0] == "heal", "several heals at once make one sound");
+
+        sounds = battleSoundsFor({{Event::Kind::ACTION, rayne, 0, "Defend"}});
+        expect(has(sounds, "guard"), "defending has a sound");
+        sounds = battleSoundsFor({{Event::Kind::DEFEATED, &thug, 0, {}}, {Event::Kind::DEFEATED, rayne, 0, {}}});
+        expect(has(sounds, "enemy_down") && has(sounds, "ally_down"), "falling sounds differ by side");
+        sounds = battleSoundsFor({{Event::Kind::MESSAGE, rayne, 0, "Stunned"}});
+        expect(has(sounds, "stun"), "being stunned has a sound");
+        expect(battleSoundsFor({}).empty(), "nothing happening is silent");
+
+        // Every ability in the game makes some sound when used, so a new one
+        // cannot be added and silently forgotten.
+        for (auto charClass : {Player::CharacterClass::SOLO, Player::CharacterClass::NETRUNNER,
+                               Player::CharacterClass::INFILTRATOR}) {
+            Player member(charClass, "Test");
+            for (int level = 0; level < 12; ++level) member.levelUp();
+            for (const Ability* ability : member.getAbilities()) {
+                if (!ability) continue;
+                const auto made = battleSoundsFor({{Event::Kind::ACTION, &member, 0, ability->getName()},
+                                                   {Event::Kind::HEAL, &member, 1, {}}});
+                expect(!made.empty(), "every ability has a sound");
+                const auto bare = battleSoundsFor({{Event::Kind::ACTION, &member, 0, ability->getName()}});
+                if (bare.empty()) {
+                    std::cout << "  (" << ability->getName() << " relies on its heal sound)" << std::endl;
+                }
+            }
+        }
     }
 
     // --- Every status effect has a tag --------------------------------------

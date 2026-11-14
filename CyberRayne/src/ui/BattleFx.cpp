@@ -1,3 +1,5 @@
+#include "../../include/BattleSounds.h"
+#include <unordered_map>
 #include "../../include/ui/BattleFx.h"
 #include "../../include/Combatant.h"
 #include "../../include/ui/Theme.h"
@@ -5,7 +7,67 @@
 #include <algorithm>
 #include <cmath>
 
+namespace {
+
+struct EffectStyle {
+    const char* sheet;
+    float framesPerSecond;
+    bool onGround;
+};
+
+// Speeds are the ones suggested with the art (Raw/vfx/README.md).
+const EffectStyle* styleFor(const std::string& sheet) {
+    static const EffectStyle styles[] = {
+        {"vfx_hit_spark", 18.0f, false},  {"vfx_fireball", 12.0f, false},
+        {"vfx_ice_shard", 12.0f, false},  {"vfx_lightning", 15.0f, false},
+        {"vfx_explosion", 12.0f, false},  {"vfx_hack_stream", 12.0f, false},
+        {"vfx_poison", 10.0f, false},     {"vfx_heal_glow", 10.0f, true},
+        {"vfx_levelup", 10.0f, true},
+    };
+    for (const EffectStyle& style : styles) {
+        if (sheet == style.sheet) return &style;
+    }
+    return nullptr;
+}
+
+// What an action looks like when it lands on its target.
+std::string effectForAction(const Combatant* actor, const std::string& action) {
+    static const std::unordered_map<std::string, const char*> byName = {
+        {"Suppressing Fire", "vfx_fireball"}, {"Executioner", "vfx_explosion"},
+        {"Ice Breaker", "vfx_ice_shard"},     {"ICE Spike", "vfx_ice_shard"},
+        {"System Shock", "vfx_lightning"},    {"Taser Burst", "vfx_lightning"},
+        {"Corrupt", "vfx_hack_stream"},       {"Lockout", "vfx_hack_stream"},
+        {"Neurotoxin", "vfx_poison"},
+    };
+    auto found = byName.find(action);
+    if (found != byName.end()) {
+        return found->second;
+    }
+    // Plain attacks and everything else follow the attacker's kind of weapon.
+    const std::string kind = attackSoundFor(actor);
+    if (kind == "hack") return "vfx_hack_stream";
+    if (kind == "zap") return "vfx_lightning";
+    return "vfx_hit_spark";
+}
+
+}  // namespace
+
+void BattleFx::playEffect(const Combatant* who, const std::string& sheet, bool flip) {
+    if (!who) return;
+    const EffectStyle* style = styleFor(sheet);
+    Effect effect;
+    effect.who = who;
+    effect.sheet = sheet;
+    effect.flip = flip;
+    if (style) {
+        effect.framesPerSecond = style->framesPerSecond;
+        effect.onGround = style->onGround;
+    }
+    m_effects.push_back(effect);
+}
+
 void BattleFx::reset() {
+    m_effects.clear();
     m_popups.clear();
     m_timers.clear();
     m_banner.clear();
@@ -26,10 +88,15 @@ void BattleFx::addPopup(const Combatant* who, const std::string& text, uint32_t 
 
 void BattleFx::onEvents(const std::vector<BattleSystem::BattleEvent>& events) {
     using Kind = BattleSystem::BattleEvent::Kind;
+    // The action this batch's damage came from, if any.
+    const Combatant* actor = nullptr;
+    std::string action;
     for (const auto& event : events) {
         const Combatant* who = event.subject;
         switch (event.kind) {
             case Kind::ACTION:
+                actor = who;
+                action = event.text;
                 if (who) {
                     Timers& timers = m_timers[who];
                     timers.lunge = LUNGE_TIME;
@@ -50,6 +117,14 @@ void BattleFx::onEvents(const std::vector<BattleSystem::BattleEvent>& events) {
             case Kind::DAMAGE:
                 if (!who) break;
                 m_timers[who].flash = FLASH_TIME;
+                if (actor) {
+                    // The party stands on the right, so its attacks travel
+                    // right to left: mirror the effect.
+                    playEffect(who, effectForAction(actor, action), actor->isPlayer());
+                } else {
+                    // Damage nobody dealt is a status effect ticking.
+                    playEffect(who, "vfx_poison");
+                }
                 addPopup(who, std::to_string(event.amount),
                          who->isPlayer() ? Theme::LOVE : Theme::TEXT);
                 break;
@@ -57,6 +132,7 @@ void BattleFx::onEvents(const std::vector<BattleSystem::BattleEvent>& events) {
                 if (!who) break;
                 // Healing someone who was down means they are back up.
                 m_timers[who].defeatedFor = -1.0f;
+                playEffect(who, "vfx_heal_glow");
                 addPopup(who, "+" + std::to_string(event.amount), Theme::FOAM);
                 break;
             case Kind::DEFEATED:
@@ -82,6 +158,13 @@ void BattleFx::update(float deltaTime) {
     m_popups.erase(std::remove_if(m_popups.begin(), m_popups.end(),
                                   [](const Popup& p) { return p.age >= POPUP_LIFETIME; }),
                    m_popups.end());
+
+    for (Effect& effect : m_effects) {
+        effect.age += deltaTime;
+    }
+    m_effects.erase(std::remove_if(m_effects.begin(), m_effects.end(),
+                                   [](const Effect& e) { return e.frame() >= EFFECT_FRAMES; }),
+                    m_effects.end());
 
     for (auto& [who, timers] : m_timers) {
         timers.flash = std::max(0.0f, timers.flash - deltaTime);
@@ -136,7 +219,7 @@ bool BattleFx::isDefeated(const Combatant* who) const {
 }
 
 bool BattleFx::isBusy() const {
-    if (!m_popups.empty()) {
+    if (!m_popups.empty() || !m_effects.empty()) {
         return true;
     }
     for (const auto& [who, timers] : m_timers) {
@@ -148,14 +231,14 @@ bool BattleFx::isBusy() const {
 
 StatusTag statusTagFor(StatusEffect::Type type) {
     switch (type) {
-        case StatusEffect::Type::POISON:       return {"PSN", Theme::LOVE};
-        case StatusEffect::Type::STUN:         return {"STN", Theme::GOLD};
-        case StatusEffect::Type::DEFENSE_UP:   return {"DEF+", Theme::FOAM};
-        case StatusEffect::Type::DEFENSE_DOWN: return {"DEF-", Theme::LOVE};
-        case StatusEffect::Type::ATTACK_UP:    return {"ATK+", Theme::FOAM};
-        case StatusEffect::Type::ATTACK_DOWN:  return {"ATK-", Theme::LOVE};
-        case StatusEffect::Type::SLOW:         return {"SLOW", Theme::IRIS};
-        case StatusEffect::Type::REGEN:        return {"RGN", Theme::FOAM};
+        case StatusEffect::Type::POISON:       return {"PSN", Theme::LOVE, "status_poison"};
+        case StatusEffect::Type::STUN:         return {"STN", Theme::GOLD, "status_stun"};
+        case StatusEffect::Type::DEFENSE_UP:   return {"DEF+", Theme::FOAM, "status_defense_up"};
+        case StatusEffect::Type::DEFENSE_DOWN: return {"DEF-", Theme::LOVE, "status_debuff"};
+        case StatusEffect::Type::ATTACK_UP:    return {"ATK+", Theme::FOAM, "status_buff"};
+        case StatusEffect::Type::ATTACK_DOWN:  return {"ATK-", Theme::LOVE, "status_attack_down"};
+        case StatusEffect::Type::SLOW:         return {"SLOW", Theme::IRIS, "status_slow"};
+        case StatusEffect::Type::REGEN:        return {"RGN", Theme::FOAM, "status_regen"};
     }
-    return {"?", Theme::MUTED};
+    return {"?", Theme::MUTED, ""};
 }

@@ -475,10 +475,72 @@ See the notes above. Drawn art can still replace any code-drawn screen later.
 
 ## Current Phase
 
-### Phase 12: Audio
+### Painted battle backdrops (user art, 2026-11-11)
 
-- Real backend behind `AudioManager` (miniaudio, single header, like `stb_image`).
-- Settle `.ogg` vs `.wav`; a few music tracks and about 10 sound effects.
+The user generated one battle background per district into `Raw/backgrounds/`.
+- Conformed to 960x540 opaque PNGs in `assets/backgrounds/battle_background_<district>.png`
+  with `spriteprep.py --category backgrounds --size 960x540 --fill` (`--fill` is new:
+  cover the frame and crop, no transparent slivers). The backgrounds spec now allows up
+  to 960x540, which doubles to 1080p like the battle sprites.
+- `BattleScene::drawBackdropArt` scales the painting to cover the scene and puts its
+  ground line (`BACKDROP_GROUND_LINE`, 46.5% down the image) on the scene's horizon, so
+  feet land on the pavement at any window shape. A district with no painting falls back
+  to the generated skyline, which the title and character select still use.
+- Battle figure size now follows the tighter of window width and height.
+- Known rough edge: in a narrow window (about 1100 px wide) enemy labels can overlap and
+  the party panel's MP and TIME columns collide.
+
+### Icons and effect animations (user art, 2026-11-14)
+
+The user generated 29 icons and 12 effect sheets into `Raw/` (`items`, `equipment`,
+`spells`, `ui`, `vfx`; each folder has a README).
+- **Icons** are 32x32, conformed with `spriteprep.py --no-palette`, and found by ID, not
+  display name (`SpriteLibrary::icon` / `itemIcon`): `items/<item id>`,
+  `equipment/<item id>`, `spells/<ability id>`, `ui/status_*`. They show in the battle
+  ability and item lists, the pause menu's item and equipment screens, and as status
+  icons under fighters and in the party panel (`StatusTag::icon`; text tag if no file).
+  `credstick` and `data_chip` are conformed but nothing uses them yet.
+- **Effect sheets** are 4x2 grids of 64x64 frames in `assets/vfx/` (the vfx spec is now
+  exactly 256x128). `sheetprep.py` builds them from files named `vfx_*`; frames are not
+  re-centred, because an effect's position in its frame is part of the animation, and
+  soft edges are kept.
+- **In battle**, `BattleFx` starts an effect on whoever is hit or healed
+  (`BattleFx::Effect`, drawn by `BattleScene`): the kind follows the attacker's weapon or
+  the ability used, damage nobody dealt shows as poison, heals glow at the feet, and
+  party attacks are mirrored. Level-ups burst on the victory card.
+- **On the map**, neon signs cast a pulsing glow, rain falls in Neon Alley and dust
+  drifts in Neo-Kyoto Central (`World::render`).
+- Not seen in motion: battle effects, icons in the command menu and status icons (they
+  need button presses to reach). The map effects and icon art were checked by screenshot.
+- `vfx_fireball` is used for Suppressing Fire and `vfx_explosion` for Executioner; those
+  pairings are guesses.
+
+### Phase 12: Audio — IN PROGRESS
+
+Done (2026-11-11):
+- **Real playback.** `AudioManager` plays music and sound effects by name through an
+  `AudioBackend`. The game's backend is miniaudio (`third_party/miniaudio.h` v0.11.21,
+  with `stb_vorbis.c` for Ogg), in `systems/AudioBackendMiniaudio.cpp`, compiled with
+  warnings off. Tests link `AudioBackendNone.cpp` and a fake backend, so they need no
+  sound device; with no device the game runs silent.
+- **Files are found by name:** `assets/audio/music/<name>.ogg` and
+  `assets/audio/sfx/<name>.wav` (mp3/flac also accepted). A sound with no file is silent
+  and logged once, so new sounds can be asked for before their files exist.
+- **Music follows the game** (`GameState::updateMusic`): title, a track per district,
+  battle or boss (story fights), victory, game over, ending. A missing track borrows a
+  stand-in (`setMusicFallback`). The pause menu ducks the music instead of muting.
+- **Sound effects are wired** for all of ASSET_LIST section 9 except `ui_equip`: menus
+  (`GameState::playUiSound`), exploring, and battle. Battle sounds come from battle
+  events through `battleSoundsFor` (`systems/BattleSounds`); a test fails if an ability
+  is added without a sound.
+- A second session generated starter audio for all 41 files with
+  `tools/generate_audio.py` (synthesised; any file can be replaced by a real one).
+
+Remaining:
+- Volume sliders in Settings (music and effects), saved with the key bindings.
+- Wire `ui_equip` (the equip screen is handled inside `PauseMenu`).
+- Replace the synthesised music with the composer's tracks as they arrive.
+- By ear: check levels between music and effects, and that looping tracks loop cleanly.
 
 ### Phase 13: Balance and Lock
 

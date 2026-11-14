@@ -62,8 +62,10 @@ public:
     static const std::vector<std::string>& entries();
 
 #ifndef NO_VULKAN
+    // sprites supplies item icons; without it the lists are text only.
     void render(VulkanRenderer* renderer, TextRenderer* text, const Party* party,
-                const QuestLog* questLog, const std::string& mapName);
+                const QuestLog* questLog, const std::string& mapName,
+                class SpriteLibrary* sprites = nullptr);
 #endif
 
 private:

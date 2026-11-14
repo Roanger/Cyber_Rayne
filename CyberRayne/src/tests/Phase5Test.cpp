@@ -1,3 +1,8 @@
+#include <string>
+#include <memory>
+#include <fstream>
+#include <filesystem>
+#include <cmath>
 #include "../../include/AudioManager.h"
 #include "../../include/InputConfig.h"
 #include "../../include/InputPrompts.h"
@@ -17,72 +22,130 @@ void expect(bool condition, const char* message) {
 
 int main() {
     // === AudioManager tests ===
-    AudioManager audio;
-    expect(!audio.isInitialized(), "audio should not be initialized before init");
-    expect(audio.initialize(), "audio should initialize successfully");
-    expect(audio.isInitialized(), "audio should be initialized after init");
+    {
+        // A scratch assets folder with a few empty "sound files": the manager
+        // only needs them to exist.
+        const std::filesystem::path assets =
+            std::filesystem::temp_directory_path() / "cyberrayne_audio_test";
+        std::filesystem::remove_all(assets);
+        std::filesystem::create_directories(assets / "audio" / "music");
+        std::filesystem::create_directories(assets / "audio" / "sfx");
+        auto touch = [&](const char* relative) { std::ofstream(assets / relative) << "x"; };
+        touch("audio/music/central.ogg");
+        touch("audio/music/battle.mp3");
+        touch("audio/sfx/heal.wav");
 
-    // Volume controls
-    audio.setMasterVolume(0.5f);
-    expect(audio.getMasterVolume() == 0.5f, "master volume should be 0.5");
-    audio.setMusicVolume(0.3f);
-    expect(audio.getMusicVolume() == 0.3f, "music volume should be 0.3");
-    audio.setSFXVolume(0.7f);
-    expect(audio.getSFXVolume() == 0.7f, "sfx volume should be 0.7");
+        // Records what the manager asks the sound device to do.
+        struct Log {
+            std::vector<std::string> music;
+            std::vector<std::string> sfx;
+            std::vector<bool> loops;
+            int stops = 0;
+            float musicVolume = -1.0f;
+            float lastSfxVolume = -1.0f;
+        };
+        struct FakeBackend : AudioBackend {
+            explicit FakeBackend(Log* log) : log(log) {}
+            bool playMusic(const std::string& path, bool loop, float volume) override {
+                log->music.push_back(std::filesystem::path(path).filename().string());
+                log->loops.push_back(loop);
+                log->musicVolume = volume;
+                return true;
+            }
+            void stopMusic() override { ++log->stops; }
+            void setMusicVolume(float volume) override { log->musicVolume = volume; }
+            bool playSfx(const std::string& path, float volume) override {
+                log->sfx.push_back(std::filesystem::path(path).filename().string());
+                log->lastSfxVolume = volume;
+                return true;
+            }
+            Log* log;
+        };
 
-    // Clamping
-    audio.setMasterVolume(2.0f);
-    expect(audio.getMasterVolume() == 1.0f, "master volume should clamp to 1.0");
-    audio.setMasterVolume(-0.5f);
-    expect(audio.getMasterVolume() == 0.0f, "master volume should clamp to 0.0");
+        Log log;
+        AudioManager audio;
+        expect(!audio.isInitialized(), "audio should not be initialized before init");
+        expect(audio.initialize(assets.string(), std::make_unique<FakeBackend>(&log)), "audio should initialize");
+        expect(audio.isInitialized(), "audio should be initialized after init");
 
-    // Sound registration
-    int musicId = audio.registerSound("bgm_main", "assets/audio/bgm_main.ogg", AudioManager::ChannelType::MUSIC);
-    expect(musicId >= 0, "music registration should return valid id");
-    int sfxId = audio.registerSound("sfx_hit", "assets/audio/sfx_hit.wav", AudioManager::ChannelType::SFX);
-    expect(sfxId >= 0, "sfx registration should return valid id");
-    expect(audio.getSoundCount() == 2, "should have 2 sounds registered");
+        // Music: found by name, whatever the file type; asking again is free.
+        audio.playMusic("central");
+        expect(log.music.size() == 1 && log.music[0] == "central.ogg" && log.loops[0], "a track plays, looping");
+        audio.playMusic("central");
+        expect(log.music.size() == 1, "asking for the current track does not restart it");
+        audio.playMusic("battle");
+        expect(log.music.size() == 2 && log.music[1] == "battle.mp3", "other file types are found too");
+        expect(audio.getCurrentMusic() == "battle", "the current track is remembered");
 
-    // Name lookup
-    expect(audio.getSoundId("bgm_main") == musicId, "name lookup should find music id");
-    expect(audio.getSoundId("sfx_hit") == sfxId, "name lookup should find sfx id");
-    expect(audio.getSoundId("nonexistent") == -1, "nonexistent sound should return -1");
+        // A track with no file borrows its stand-in; one borrowing the file
+        // already playing carries on without a restart.
+        audio.setMusicFallback("boss", "battle");
+        audio.setMusicFallback("alley", "central");
+        audio.playMusic("boss");
+        expect(log.music.size() == 2, "a stand-in that is already playing is not restarted");
+        audio.playMusic("alley");
+        expect(log.music.size() == 3 && log.music[2] == "central.ogg", "a missing track plays its stand-in");
 
-    // Playback
-    expect(!audio.isPlaying(musicId), "music should not be playing initially");
-    audio.playSound(musicId);
-    expect(audio.isPlaying(musicId), "music should be playing after play");
-    audio.stopSound(musicId);
-    expect(!audio.isPlaying(musicId), "music should stop after stop");
+        // No file and no stand-in: silence, not an error.
+        const int stopsBefore = log.stops;
+        audio.playMusic("ending");
+        expect(log.music.size() == 3 && log.stops == stopsBefore + 1, "a track with no file stops the music");
+        audio.playMusicOnce("battle");
+        expect(log.music.size() == 4 && !log.loops[3], "a one-shot does not loop");
 
-    // Mute
-    audio.playSound(sfxId);
-    expect(audio.isPlaying(sfxId), "sfx should be playing");
-    audio.setMuted(true);
-    expect(audio.isMuted(), "should be muted");
-    expect(!audio.isPlaying(sfxId), "sfx should stop when muted");
-    audio.setMuted(false);
-    expect(!audio.isMuted(), "should be unmuted");
+        // Sound effects.
+        audio.playSfx("heal");
+        expect(log.sfx.size() == 1 && log.sfx[0] == "heal.wav", "a sound effect plays");
+        audio.playSfx("heal");
+        expect(log.sfx.size() == 1, "the same sound straight away is dropped");
+        audio.update(AudioManager::SFX_REPEAT_GUARD + 0.01f);
+        audio.playSfx("heal");
+        expect(log.sfx.size() == 2, "and plays again a moment later");
+        audio.playSfx("gunshot");
+        expect(log.sfx.size() == 2, "a sound with no file is silent");
 
-    // Stop all
-    audio.playSound(musicId);
-    audio.playSound(sfxId);
-    audio.stopAllSounds();
-    expect(!audio.isPlaying(musicId), "music should stop after stopAll");
-    expect(!audio.isPlaying(sfxId), "sfx should stop after stopAll");
+        // Volume: master times channel; clamped to 0..1.
+        audio.setMasterVolume(0.5f);
+        audio.setMusicVolume(0.4f);
+        expect(std::fabs(log.musicVolume - 0.2f) < 0.001f, "music volume is master times music");
+        audio.setSFXVolume(0.5f);
+        audio.update(1.0f);
+        audio.playSfx("heal");
+        expect(std::fabs(log.lastSfxVolume - 0.25f) < 0.001f, "sfx volume is master times sfx");
+        audio.setMasterVolume(2.0f);
+        expect(audio.getMasterVolume() == 1.0f, "master volume should clamp to 1.0");
+        audio.setMasterVolume(-0.5f);
+        expect(audio.getMasterVolume() == 0.0f, "master volume should clamp to 0.0");
+        audio.setMasterVolume(1.0f);
+        audio.setMusicVolume(1.0f);
 
-    // Stop by channel
-    audio.playSound(musicId);
-    audio.playSound(sfxId);
-    audio.stopMusic();
-    expect(!audio.isPlaying(musicId), "music should stop after stopMusic");
-    expect(audio.isPlaying(sfxId), "sfx should still play after stopMusic");
-    audio.stopAllSFX();
-    expect(!audio.isPlaying(sfxId), "sfx should stop after stopAllSFX");
+        // Ducking quietens the music but lets sound effects through; muting
+        // silences both.
+        audio.setMusicDucked(true);
+        expect(std::fabs(log.musicVolume - AudioManager::DUCKED_SCALE) < 0.001f, "ducked music is quiet");
+        audio.update(1.0f);
+        const std::size_t before = log.sfx.size();
+        audio.playSfx("heal");
+        expect(log.sfx.size() == before + 1, "sound effects still play while ducked");
+        audio.setMusicDucked(false);
+        audio.setMuted(true);
+        expect(log.musicVolume == 0.0f, "muted music is silent");
+        audio.update(1.0f);
+        audio.playSfx("heal");
+        expect(log.sfx.size() == before + 1, "muted sound effects do not play");
+        audio.setMuted(false);
+        expect(log.musicVolume == 1.0f, "unmuting restores the music");
 
-    // Shutdown
-    audio.shutdown();
-    expect(!audio.isInitialized(), "audio should not be initialized after shutdown");
+        // With no sound device at all, everything is a quiet no-op.
+        AudioManager silent;
+        expect(silent.initialize(assets.string(), nullptr), "audio initializes without a device");
+        silent.playMusic("central");
+        silent.playSfx("heal");
+        expect(silent.getCurrentMusic() == "central", "and still tracks what should be playing");
+
+        audio.shutdown();
+        std::filesystem::remove_all(assets);
+    }
 
     // === InputConfig tests ===
     InputConfig config;

@@ -43,10 +43,18 @@ public:
                         const std::string& kind, int cols, int rows);
     const Sprite& memberSheet(const Player& member, const std::string& kind, int cols, int rows);
 
+    // A small picture found by an ID rather than a display name:
+    // assets/<category>/<id>.png. Used for ability icons (spells/<ability id>),
+    // status icons (ui/status_*) and effect sheets (vfx/vfx_*). Optional, so
+    // a missing one is not reported.
+    const Sprite& icon(const std::string& category, const std::string& id, int cols = 1, int rows = 1);
+    // An item's icon: equipment/<id> for weapons and armor, items/<id> otherwise.
+    const Sprite& itemIcon(const class Item& item);
+
     // Draw one frame into a pixel rectangle. tint multiplies the image colour.
     void draw(const Sprite& sprite, int leftPx, int topPx, int widthPx, int heightPx,
               float r = 1.0f, float g = 1.0f, float b = 1.0f, float a = 1.0f,
-              int col = 0, int row = 0) const;
+              int col = 0, int row = 0, bool flipX = false) const;
 
 private:
     const Sprite& load(const std::string& key, int cols, int rows, bool reportMissing);

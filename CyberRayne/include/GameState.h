@@ -141,6 +141,15 @@ private:
     int m_heldDx = 0;
     int m_heldDy = 0;
 
+    // Play a sound effect by name; silent if audio is off or the file is missing.
+    void sfx(const std::string& name);
+    // Keep the music matched to where the player is.
+    void updateMusic();
+    // Menu blips for an input, when a menu is what the input is going to.
+    void playUiSound(InputAction action);
+    // Whose turn it was last frame, to notice a new turn starting.
+    const Combatant* m_lastBattleActor = nullptr;
+
     // Start the leader on a one-tile step, if nothing is in the way.
     void tryStep(int dx, int dy);
     std::unique_ptr<World> m_world;

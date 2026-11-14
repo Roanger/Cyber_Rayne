@@ -20,8 +20,9 @@ phase live in [AGENTS.md](AGENTS.md).
 - A battle screen with animated character and enemy sprites, damage numbers and status tags
 - Walking animation on the map, and NPCs that idle and gesture when spoken to
 - Procedurally generated pixel-art tiles
+- Music and sound effects (drop files into `assets/audio/music` and `assets/audio/sfx`)
 
-Still to come: audio.
+Still to come: volume settings and final music.
 
 ## Building (Linux)
 

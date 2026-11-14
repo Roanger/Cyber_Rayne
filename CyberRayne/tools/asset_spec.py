@@ -47,6 +47,11 @@ class CategorySpec:
                 f"{self.max_size[0]}x{self.max_size[1]}")
 
 
+# Effect sheets: eight frames in a 4x2 grid.
+VFX_COLS = 4
+VFX_ROWS = 2
+VFX_FRAME = 64
+
 # Tiles are deliberately absent: they are generated at runtime by
 # TileTextureGen.cpp and never exist as files.
 SPECS: list[CategorySpec] = [
@@ -87,9 +92,10 @@ SPECS: list[CategorySpec] = [
     ),
     CategorySpec(
         directory="vfx",
-        size=(32, 32),
-        max_size=(64, 64),
-        notes="Single frames, or horizontal strips whose width is a multiple of height.",
+        size=(VFX_COLS * VFX_FRAME, VFX_ROWS * VFX_FRAME),
+        notes="Effect animations: a 4x2 sheet of eight 64x64 frames, read left to "
+              "right, top row first. Soft edges are allowed (effects are drawn "
+              "last, over everything). Built by sheetprep.py from files named vfx_*.",
     ),
     CategorySpec(
         directory="ui",
@@ -101,10 +107,14 @@ SPECS: list[CategorySpec] = [
     CategorySpec(
         directory="backgrounds",
         size=(320, 180),
-        max_size=(640, 360),
+        max_size=(960, 540),
         requires_alpha=False,
         requires_transparent_pixels=False,
-        notes="Battle and cutscene backdrops. Opaque by design.",
+        notes="Battle and cutscene backdrops. Opaque by design. 960x540 doubles "
+              "to 1920x1080, the same 2x the battle sprites are drawn at, so "
+              "backdrop and sprite pixels are the same size. Battle backdrops are "
+              "named battle_background_<district>.png with the ground line about "
+              "46% down the image.",
     ),
     CategorySpec(
         directory="fonts",

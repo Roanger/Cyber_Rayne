@@ -1,3 +1,4 @@
+#include "../../include/BattleSounds.h"
 #include "../../include/InputPrompts.h"
 #include "../../include/EnemyTypes.h"
 #include "../../include/ui/BattleScene.h"
@@ -33,6 +34,9 @@ GameState::~GameState() = default;
 void GameState::setRenderer(VulkanRenderer* renderer) {
     std::cout << "Setting renderer for GameState" << std::endl;
     m_renderer = renderer;
+    if (m_audioManager && renderer) {
+        m_audioManager->setAssetsPath(renderer->getAssetsBasePath());
+    }
     
     // Load menu textures if menu system is initialized
     if (m_menuSystem && m_renderer) {
@@ -114,10 +118,13 @@ bool GameState::initialize() {
     
     // Initialize audio manager
     m_audioManager = std::make_unique<AudioManager>();
-    if (!m_audioManager->initialize()) {
-        std::cerr << "Failed to initialize audio manager!" << std::endl;
-        // Non-fatal — audio is optional
-    }
+    // Sound is optional: with no device or no files the game runs silent.
+    m_audioManager->initialize("assets", createDefaultAudioBackend());
+    // Until every track exists, some places borrow another's music.
+    m_audioManager->setMusicFallback("alley", "central");
+    m_audioManager->setMusicFallback("plaza", "central");
+    m_audioManager->setMusicFallback("boss", "battle");
+    m_audioManager->setMusicFallback("ending", "title");
 
     // Initialize input config with default bindings
     m_inputConfig = std::make_unique<InputConfig>();
@@ -153,8 +160,105 @@ bool GameState::initialize() {
     return true;
 }
 
+void GameState::sfx(const std::string& name) {
+    if (m_audioManager) {
+        m_audioManager->playSfx(name);
+    }
+}
+
+void GameState::updateMusic() {
+    if (!m_audioManager) {
+        return;
+    }
+    switch (m_currentState) {
+        case State::MENU:
+        case State::CHARACTER_SELECTION:
+            m_audioManager->playMusic("title");
+            break;
+        case State::WORLD_EXPLORATION:
+        case State::PAUSED: {
+            if (m_showEnding) {
+                m_audioManager->playMusic("ending");
+                break;
+            }
+            const Map* map = m_world ? m_world->getCurrentMap() : nullptr;
+            const std::string name = map ? map->getName() : std::string();
+            if (name == "Neon Alley") {
+                m_audioManager->playMusic("alley");
+            } else if (name == "Corporate Plaza") {
+                m_audioManager->playMusic("plaza");
+            } else {
+                m_audioManager->playMusic("central");
+            }
+            break;
+        }
+        case State::BATTLE:
+            // Story fights carry a tag; ambushes do not.
+            m_audioManager->playMusic(m_battleTag.empty() ? "battle" : "boss");
+            break;
+        case State::BATTLE_RESULT:
+            m_audioManager->playMusicOnce("victory");
+            break;
+        case State::GAME_OVER:
+            m_audioManager->playMusicOnce("game_over");
+            break;
+        case State::SETTINGS:
+        case State::EXIT:
+            break;  // keep whatever was playing
+    }
+}
+
+void GameState::playUiSound(InputAction action) {
+    const bool vertical = action == InputAction::MOVE_UP || action == InputAction::MOVE_DOWN;
+    const bool horizontal = action == InputAction::MOVE_LEFT || action == InputAction::MOVE_RIGHT;
+    const bool talking = m_dialogue && m_dialogue->isActive();
+
+    bool menuOpen = false;   // is a menu what this input goes to?
+    bool moves = vertical;   // does this direction move its cursor?
+    switch (m_currentState) {
+        case State::MENU:
+        case State::PAUSED:
+        case State::SETTINGS:
+            menuOpen = true;
+            break;
+        case State::CHARACTER_SELECTION:
+            menuOpen = true;
+            moves = horizontal;
+            break;
+        case State::BATTLE:
+            // Only while someone is choosing a command.
+            menuOpen = m_battleSystem && m_battleSystem->getCurrentActor();
+            moves = vertical || horizontal;
+            break;
+        case State::BATTLE_RESULT:
+        case State::GAME_OVER:
+            menuOpen = true;
+            moves = false;
+            break;
+        case State::WORLD_EXPLORATION:
+            menuOpen = talking || m_showEnding;
+            break;
+        case State::EXIT:
+            break;
+    }
+    if (!menuOpen) {
+        return;
+    }
+    if (moves) {
+        sfx("ui_move");
+    } else if (action == InputAction::CONFIRM) {
+        sfx(talking ? "talk_blip" : "ui_confirm");
+    } else if (action == InputAction::CANCEL) {
+        sfx("ui_cancel");
+    }
+}
+
 void GameState::update(float deltaTime) {
     m_animTime += deltaTime;
+    if (m_audioManager) {
+        m_audioManager->update(deltaTime);
+    }
+    updateMusic();
     if (m_pendingDevStart) {
         m_pendingDevStart = false;
         std::cout << "CYBERRAYNE_START=world — skipping menus." << std::endl;
@@ -255,11 +359,13 @@ void GameState::update(float deltaTime) {
                     const std::string blocked = m_world->consumeBlockedMap();
                     if (!blocked.empty() && m_storyHud) {
                         m_storyHud->pushToast(m_storyDirector->getLockedMessage(blocked));
+                        sfx("blocked");
                     }
 
                     const std::string& mapName = m_world->getCurrentMap()->getName();
                     if (mapName != m_lastMapName) {
                         m_lastMapName = mapName;
+                        sfx("travel");
                         m_storyDirector->onMapEntered(mapName);
                         syncStory();
                     }
@@ -273,12 +379,14 @@ void GameState::update(float deltaTime) {
                 if (!encountered && m_party) {
                     Player* leader = m_party->getMember(0);
                     if (leader && leader->consumeStepCompleted()) {
+                        sfx("step");
                         encountered = m_world->onPlayerStep();
                     }
                 }
 
                 if (encountered) {
                     m_battleTag = m_world->getActiveEncounterTag();
+                    sfx("encounter");
                     m_currentState = State::BATTLE;
                 } else if (m_heldDx != 0 || m_heldDy != 0) {
                     // A direction is held: start the next step in the same
@@ -292,7 +400,11 @@ void GameState::update(float deltaTime) {
             // Frozen — no world updates while paused.
             break;
         case State::BATTLE_RESULT:
-            // Waiting for the player to dismiss the victory card.
+            // Waiting for the player to dismiss the victory card. The scene
+            // behind it keeps animating (level-up bursts).
+            if (m_battleScene) {
+                m_battleScene->update(deltaTime);
+            }
             break;
         case State::SETTINGS:
             break;
@@ -335,6 +447,7 @@ void GameState::update(float deltaTime) {
                         // Rejected actions leave the turn intact; surface why so
                         // the player can pick something else.
                         m_uiManager->setStatusMessage(m_battleSystem->getLastRejectionReason());
+                        sfx("ui_error");
                     }
                     m_uiManager->resetAction();
                 }
@@ -344,8 +457,19 @@ void GameState::update(float deltaTime) {
                     m_uiManager->setCurrentActor(m_battleSystem->getCurrentActor());
                 }
 
+                // A party member's gauge has filled: their turn begins.
+                const Combatant* actor = m_battleSystem->getCurrentActor();
+                if (actor && actor != m_lastBattleActor) {
+                    sfx("turn_ready");
+                }
+                m_lastBattleActor = actor;
+
+                const auto events = m_battleSystem->takeEvents();
+                for (const std::string& sound : battleSoundsFor(events)) {
+                    sfx(sound);
+                }
                 if (m_battleScene) {
-                    m_battleScene->onEvents(m_battleSystem->takeEvents());
+                    m_battleScene->onEvents(events);
                     m_battleScene->update(deltaTime);
                 }
 
@@ -400,6 +524,7 @@ void GameState::render(VulkanRenderer* renderer) {
                                           m_battleSystem->getCurrentActor(),
                                           m_uiManager->getHighlightedTarget());
                 }
+                m_uiManager->setSprites(m_sprites.get());
                 m_uiManager->renderBattleUI(renderer, m_party.get(),
                                             m_battleSystem->getLivingEnemies(),
                                             m_battleSystem->getLivingAllies());
@@ -423,7 +548,7 @@ void GameState::render(VulkanRenderer* renderer) {
     if (m_currentState == State::PAUSED && m_pauseMenu && m_storyHud) {
         const std::string mapName =
             (m_world && m_world->getCurrentMap()) ? m_world->getCurrentMap()->getName() : "";
-        m_pauseMenu->render(renderer, m_storyHud->text(), m_party.get(), m_questLog.get(), mapName);
+        m_pauseMenu->render(renderer, m_storyHud->text(), m_party.get(), m_questLog.get(), mapName, m_sprites.get());
     }
 }
 
@@ -467,6 +592,7 @@ void GameState::renderWorldScene(VulkanRenderer* renderer) {
 }
 
 void GameState::handleInput(InputAction action) {
+    playUiSound(action);
     if (m_currentState == State::MENU && m_menuSystem) {
         m_menuSystem->handleInput(action);
     } else if (m_currentState == State::CHARACTER_SELECTION && m_charSelectionSystem) {
@@ -479,14 +605,20 @@ void GameState::handleInput(InputAction action) {
                 togglePause();
                 break;
             case PauseMenu::Command::SAVE:
-                m_pauseMenu->setStatus(saveGame() ? "Game saved." : "Save failed. See the log for details.");
+                if (saveGame()) {
+                    m_pauseMenu->setStatus("Game saved.");
+                    sfx("ui_save");
+                } else {
+                    m_pauseMenu->setStatus("Save failed. See the log for details.");
+                    sfx("ui_error");
+                }
                 break;
             case PauseMenu::Command::OPEN_SETTINGS:
                 openSettings();
                 break;
             case PauseMenu::Command::QUIT_TO_TITLE:
                 if (m_audioManager) {
-                    m_audioManager->setMuted(false);
+                    m_audioManager->setMusicDucked(false);
                 }
                 returnToTitle();
                 break;
@@ -515,6 +647,7 @@ void GameState::finishBattle() {
     const int expEarned = m_battleSystem->getExperienceEarned();
     const int goldEarned = m_battleSystem->getGoldEarned();
     m_battleSystem.reset();
+    m_lastBattleActor = nullptr;
     // The scene points at the enemies, which are destroyed just below.
     if (m_battleScene) {
         m_battleScene->clearEnemies();
@@ -552,6 +685,7 @@ void GameState::finishBattle() {
         if (m_storyHud) {
             m_storyHud->pushToast("Got away safely.");
         }
+        sfx("flee");
         m_currentState = State::WORLD_EXPLORATION;
         return;
     }
@@ -572,10 +706,16 @@ void GameState::finishBattle() {
                 m_battleSummary->revived.push_back(member->getName() + " is back on their feet");
             }
             if (i < m_levelsBeforeBattle.size() && member->getLevel() > m_levelsBeforeBattle[i]) {
+                if (m_battleScene) {
+                    m_battleScene->playEffect(member, "vfx_levelup");
+                }
                 m_battleSummary->levelUps.push_back(member->getName() + " reached level " +
                                                     std::to_string(member->getLevel()));
             }
         }
+    }
+    if (!m_battleSummary->levelUps.empty()) {
+        sfx("level_up");
     }
     m_currentState = State::BATTLE_RESULT;
 }
@@ -675,6 +815,9 @@ void GameState::reportDialogueNode() {
         return;
     }
     m_reportedNodeId = node->getId();
+    if (node->getId() == StoryDirector::NODE_VENDOR_MEAL) {
+        sfx("rest");
+    }
     m_storyDirector->onDialogueNode(m_talkingTo, node->getId());
     syncStory();
 }
@@ -706,6 +849,11 @@ void GameState::syncStory() {
     if (m_storyHud) {
         for (const auto& message : m_storyDirector->takeNotifications()) {
             m_storyHud->pushToast(message);
+            if (message.rfind("New quest", 0) == 0) {
+                sfx("quest_new");
+            } else if (message.rfind("Quest complete", 0) == 0) {
+                sfx("quest_done");
+            }
         }
     }
 }
@@ -893,13 +1041,14 @@ void GameState::togglePause() {
             m_pauseMenu->open();
         }
         if (m_audioManager) {
-            m_audioManager->setMuted(true);
+            m_audioManager->setMusicDucked(true);
         }
+        sfx("ui_pause");
         std::cout << "Game paused." << std::endl;
     } else if (m_currentState == State::PAUSED) {
         m_currentState = State::WORLD_EXPLORATION;
         if (m_audioManager) {
-            m_audioManager->setMuted(false);
+            m_audioManager->setMusicDucked(false);
         }
         std::cout << "Game resumed." << std::endl;
     }

@@ -18,6 +18,7 @@ The kind of sheet comes from the file name (see SHEET_KINDS in asset_spec.py):
     solo_walk.png              4x4  rows: down, left, right, up
     street_thug_battle.png     4x4  rows: idle, attack, ability, guard
     fixer_kaga_idle_talk.png   4x2  rows: idle, talk
+    vfx_hit_spark.png          4x2  eight frames of one effect (no standing sprite)
 
 The standing sprite (assets/characters/solo.png and so on) must already exist:
 it says which folder the sheet belongs in and how tall the character should be.
@@ -42,7 +43,8 @@ except ImportError:
     sys.exit("Pillow and numpy are required: pip install Pillow numpy")
 
 sys.path.insert(0, str(Path(__file__).parent))
-from asset_spec import SHEET_KINDS, SPECS_BY_DIR, sheet_kind_for  # noqa: E402
+from asset_spec import (SHEET_KINDS, SPECS_BY_DIR, VFX_COLS, VFX_FRAME, VFX_ROWS,  # noqa: E402
+                        sheet_kind_for)
 
 # Categories a sheet can belong to, in the order they are searched.
 SHEET_CATEGORIES = ("characters", "enemies", "npcs")
@@ -259,6 +261,59 @@ def process(path: Path, assets: Path, outdir: Path | None, alpha_threshold: int)
     return out, f"{category}, frames {cell_w}x{cell_h}, scale {scale:.3f}"
 
 
+def process_vfx(path: Path, assets: Path, outdir: Path | None, alpha_threshold: int) -> tuple[Path, str]:
+    """An effect sheet (vfx_*.png): eight frames in a 4x2 grid.
+
+    Unlike a character, an effect's position inside its frame is part of the
+    animation (a fireball flies, rain falls), so frames are not re-centred:
+    each nominal cell is shrunk as it stands. Soft edges are kept, since glows
+    and smoke need them; only the faint generator haze is removed.
+    """
+    with Image.open(path) as src:
+        rgba = np.array(src.convert("RGBA"))
+    h, w = rgba.shape[:2]
+    mask = rgba[..., 3] >= alpha_threshold
+    owner = assign_to_cells(mask, VFX_COLS, VFX_ROWS)
+
+    haze = 24  # alpha below this is generator noise, not part of the effect
+    sheet = Image.new("RGBA", (VFX_COLS * VFX_FRAME, VFX_ROWS * VFX_FRAME), (0, 0, 0, 0))
+    for index in range(VFX_COLS * VFX_ROWS):
+        col, row = index % VFX_COLS, index // VFX_COLS
+        x0, x1 = round(w * col / VFX_COLS), round(w * (col + 1) / VFX_COLS)
+        y0, y1 = round(h * row / VFX_ROWS), round(h * (row + 1) / VFX_ROWS)
+        cell = rgba[y0:y1, x0:x1].astype(np.float32) / 255.0
+        # Drop anything that belongs to a neighbouring frame and pokes in.
+        foreign = (owner[y0:y1, x0:x1] >= 0) & (owner[y0:y1, x0:x1] != index)
+        cell[foreign] = 0.0
+        cell[cell[..., 3] * 255.0 < haze] = 0.0
+        if not (cell[..., 3] > 0).any():
+            raise ValueError(f"no art found in frame {index}")
+
+        alpha = cell[..., 3:4]
+        premultiplied = np.concatenate([cell[..., :3] * alpha, alpha], axis=2)
+        channels = [
+            np.asarray(Image.fromarray(premultiplied[..., i], mode="F").resize(
+                (VFX_FRAME, VFX_FRAME), Image.BOX))
+            for i in range(4)
+        ]
+        out_alpha = channels[3]
+        safe = np.maximum(out_alpha, 1e-6)
+        out = np.zeros((VFX_FRAME, VFX_FRAME, 4), dtype=np.uint8)
+        visible = out_alpha * 255.0 >= 8
+        for i in range(3):
+            out[..., i] = np.where(visible, np.round(np.clip(channels[i] / safe, 0, 1) * 255.0), 0)
+        out[..., 3] = np.where(visible, np.round(np.clip(out_alpha, 0, 1) * 255.0), 0)
+        sheet.paste(Image.fromarray(out, "RGBA"), (col * VFX_FRAME, row * VFX_FRAME))
+
+    # "vfx_ice_shard-v2" is a revision of "vfx_ice_shard": same game file.
+    name = path.stem.split("-v")[0]
+    target_dir = outdir if outdir else assets / "vfx"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    out_path = target_dir / f"{name}.png"
+    sheet.save(out_path, "PNG", optimize=True)
+    return out_path, f"vfx, {VFX_COLS}x{VFX_ROWS} frames of {VFX_FRAME}x{VFX_FRAME}"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -276,7 +331,10 @@ def main() -> int:
         if path.suffix.lower() != ".png" or not path.is_file():
             continue
         try:
-            out, summary = process(path, args.assets, args.outdir, args.alpha_threshold)
+            if path.stem.startswith("vfx_"):
+                out, summary = process_vfx(path, args.assets, args.outdir, args.alpha_threshold)
+            else:
+                out, summary = process(path, args.assets, args.outdir, args.alpha_threshold)
         except Exception as exc:  # noqa: BLE001 - report and keep going
             print(f"  FAIL {path.name}: {exc}")
             failures += 1
