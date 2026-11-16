@@ -568,12 +568,21 @@ Done (2026-11-11):
   `~/.config/CyberRayne/audio.cfg`, beside the key bindings; `GameState` applies them at
   start and on every change. Dev shortcut: `CYBERRAYNE_START=settings`.
 
+- **Equip sound (2026-11-16).** `PauseMenu::consumeGearChanged()` tells `GameState` when
+  gear went on or came off, and it plays `ui_equip`. Every sound in ASSET_LIST section 9
+  is now wired.
+
 Remaining:
-- Wire `ui_equip` (the equip screen is handled inside `PauseMenu`).
 - Replace the synthesised music with the composer's tracks as they arrive.
 - By ear: check levels between music and effects, and that looping tracks loop cleanly.
 
 ### Phase 13: Balance and Lock
+
+**User verdict on balance (full playthrough, 2026-11-16): leave it as it is for now.**
+They won all 12 fights, and said "everything felt good": fights are winnable, but
+mismanaging resources leaves a member with only Attack and items, and they like that.
+Do not retune difficulty for the slice unless the user asks. (My reading: the 100% win
+rates in `BalanceTest` are not a problem to them; the cost is in MP and items.)
 
 - Tuning pass for a 20-30 minute slice.
 - Automated scripted-playthrough test of the full quest chain.

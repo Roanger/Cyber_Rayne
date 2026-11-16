@@ -665,6 +665,9 @@ void GameState::handleInput(InputAction action) {
             case PauseMenu::Command::NONE:
                 break;
         }
+        if (m_pauseMenu->consumeGearChanged()) {
+            sfx("ui_equip");
+        }
     } else if (m_currentState == State::SETTINGS && m_settingsMenu && m_inputConfig) {
         if (m_settingsMenu->handleInput(action, *m_inputConfig) == SettingsMenu::Command::CLOSE) {
             closeSettings();

@@ -217,7 +217,10 @@ int main() {
 
         menu.handleInput(InputAction::CONFIRM, p);
         expect(menu.getScreen() == Screen::EQUIP_CHOICE, "then a piece from the bag");
+        expect(!menu.consumeGearChanged(), "browsing gear is not a change");
         menu.handleInput(InputAction::CONFIRM, p);
+        expect(menu.consumeGearChanged() && !menu.consumeGearChanged(),
+               "equipping is reported once, for the equip sound");
         expect(cyph->getEffectiveStrength() == baseAttack + 4 && party->getBag().count("shock_baton") == 0,
                "the chosen weapon goes on the chosen member");
         expect(menu.getScreen() == Screen::EQUIP_SLOT && !menu.getStatus().empty(),

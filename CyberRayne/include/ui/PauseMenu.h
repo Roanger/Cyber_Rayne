@@ -58,6 +58,8 @@ public:
     // One line shown under the menu, e.g. "Game saved."
     void setStatus(const std::string& status) { m_status = status; }
     const std::string& getStatus() const { return m_status; }
+    // True once after gear was put on or taken off, so the game can play a sound.
+    bool consumeGearChanged() { const bool changed = m_gearChanged; m_gearChanged = false; return changed; }
 
     static const std::vector<std::string>& entries();
 
@@ -92,4 +94,5 @@ private:
     int m_slotIndex = 0;
     bool m_quitArmed = false;
     std::string m_status;
+    bool m_gearChanged = false;
 };

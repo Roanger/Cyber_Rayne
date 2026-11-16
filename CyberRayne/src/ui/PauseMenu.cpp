@@ -273,11 +273,13 @@ void PauseMenu::handleEquipment(InputAction action, Party* party) {
             const std::string& id = choices[static_cast<std::size_t>(m_listIndex)];
             const Inventory::Stack* stack = party->getBag().find(id);
             const std::string itemName = stack ? stack->prototype->getName() : id;
-            m_status = party->equipFromBag(member, id) ? name + " equipped " + itemName + "."
-                                                       : "That can't be equipped.";
+            const bool equipped = party->equipFromBag(member, id);
+            m_gearChanged = m_gearChanged || equipped;
+            m_status = equipped ? name + " equipped " + itemName + "." : "That can't be equipped.";
         } else {
-            m_status = party->unequipToBag(member, editedSlot()) ? name + "'s gear went back in the bag."
-                                                                 : "Nothing to remove.";
+            const bool removed = party->unequipToBag(member, editedSlot());
+            m_gearChanged = m_gearChanged || removed;
+            m_status = removed ? name + "'s gear went back in the bag." : "Nothing to remove.";
         }
         m_screen = Screen::EQUIP_SLOT;
         m_listIndex = m_slotIndex;
