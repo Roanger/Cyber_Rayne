@@ -515,6 +515,33 @@ The user generated 29 icons and 12 effect sheets into `Raw/` (`items`, `equipmen
 - `vfx_fireball` is used for Suppressing Fire and `vfx_explosion` for Executioner; those
   pairings are guesses.
 
+### Opening cutscene (user art, 2026-11-16)
+
+The user generated three opening pictures into `Raw/cutscenes/` (city, Kaga and Rayne,
+the mouth of Neon Alley).
+- Conformed to 960x540 opaque PNGs in `assets/cutscenes/intro_<n>.png` with
+  `spriteprep.py --category cutscenes --fill` (new `cutscenes` category in the spec).
+- **`ui/Cutscene`** steps through pictures with a caption that types itself out: Confirm
+  finishes the caption, then moves on; Cancel or the menu button skips. Logic is
+  Vulkan-free and tested in `MenuTest`. The picture is shown whole at any window shape,
+  with the caption box over its quiet lower edge or below it.
+- **`GameState::State::INTRO`** plays it after character select, before the first step.
+  Loading a save and `CYBERRAYNE_START=world` skip it; `CYBERRAYNE_START=intro` shows it.
+  The title music keeps playing.
+- The captions in `Cutscene::introPanels()` were written by the agent, not the user, and
+  only set the scene: Kaga still gives the job when talked to.
+- Rayne wears the Solo outfit in panels 2 and 3 whatever class was picked. Not decided:
+  per-class variants, or leave as is.
+- **Ending picture.** `ending_good` plays (one panel, `Cutscene::endingPanels()`) when the
+  ending triggers, before the existing closing card. Not seen on screen: it needs the
+  whole story played. `Raw/cutscenes/ending_bad.png` is not conformed or used; the story
+  has no bad-ending branch.
+- Seen by screenshot: panel 1 only. Panels 2 and 3 and skipping need button presses.
+- **`spriteprep.py` used to write beside its input by default, and replaced the three
+  originals in `Raw/` with their conformed copies** (restored from the generator's own
+  copies in `~/.codex/generated_images/`). It now defaults to `assets/<category>` and
+  refuses to overwrite its input.
+
 ### Phase 12: Audio — IN PROGRESS
 
 Done (2026-11-11):

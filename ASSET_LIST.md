@@ -1,26 +1,32 @@
 # Cyber Rayne — Master Asset List
 
-Tracks generated sources, runtime assets, and remaining art. Updated 2026-11-14
+Tracks generated sources, runtime assets, and remaining art. Updated 2026-11-16
 against the repository, asset validator, item catalog, and ability registry.
 [ASSET_SPEC.md](ASSET_SPEC.md) defines runtime dimensions and preparation rules.
 
 **Completed:** 17 approved base sprites and 22 animation sheets are generated,
 conformed, and integrated. Their originals and exact prompts are in
 [CyberRayne/Raw/](CyberRayne/Raw/MANIFEST.md) and
-[Raw/sheets/](CyberRayne/Raw/sheets/README.md). All **43 runtime image files** pass
-`python3 CyberRayne/tools/validate_assets.py` (39 character/sheet assets + 3 backgrounds + font).
+[Raw/sheets/](CyberRayne/Raw/sheets/README.md). All **84 runtime image files** pass
+`python3 CyberRayne/tools/validate_assets.py` (39 character/sheet assets + 3 backgrounds + font + 29 icons + 12 VFX sheets).
 Animation timing, facing and visual polish still need manual playtesting.
 
-**New raw art:** 9 item/story and equipment icons, 12 party ability icons, and 8
-status icons are saved with exact prompts. See the
+**Icons integrated:** 29 icons are conformed to 32x32. Equipment, consumable,
+ability and status icons are wired into menus and battle; the data chip and credstick
+icons are ready on disk but unused. Original sources and prompts remain in the
 [item/equipment manifest](CyberRayne/Raw/ICON_MANIFEST.md),
 [ability manifest](CyberRayne/Raw/spells/README.md), and
-[status manifest](CyberRayne/Raw/ui/README.md). All 29 originals still need
-small-size conformance and runtime integration.
+[status manifest](CyberRayne/Raw/ui/README.md).
 
-**Raw VFX:** All 12 listed effects now have eight-frame source sheets (96 frames)
-and exact prompts in the [VFX manifest](CyberRayne/Raw/vfx/README.md).
-Frame extraction, alignment, timing review and runtime integration remain.
+**VFX integrated:** All 12 effects have 256x128 runtime sheets (4x2, 64x64 frames)
+and are wired into battle, level-up presentation or map ambience. Original sources
+and prompts remain in the [VFX manifest](CyberRayne/Raw/vfx/README.md).
+Motion, alpha edges and timing still need manual playtesting.
+
+**Cutscene sources complete:** Three opening panels and two ending paintings are saved
+with exact prompts in [Raw/cutscenes](CyberRayne/Raw/cutscenes/README.md).
+The three opening panels and the good ending are IN GAME (2026-11-16); the bad ending is RAW, an optional concept with no implemented branch.
+Rayne wears her Solo outfit in opening panels 2 and 3 and both endings.
 
 **District backgrounds:** 3 battle scenes are conformed to 960x540 and integrated
 through `BattleScene::drawBackdropArt`, with a 46.5% source ground line aligned to
@@ -260,14 +266,14 @@ from `assets/backgrounds/`; their source links below lead to preserved originals
 | ~~mp_bar.png~~ | [CUT] | Runtime colored geometry |
 | ~~atb_bar.png~~ | [CUT] | Runtime colored geometry |
 | ~~xp_bar.png~~ | [CUT] | Runtime colored geometry |
-| [status_poison.png](CyberRayne/Raw/ui/status_poison.png) | [RAW] | POISON: damage over time |
-| [status_regen.png](CyberRayne/Raw/ui/status_regen.png) | [RAW] | REGEN: healing over time |
-| [status_stun.png](CyberRayne/Raw/ui/status_stun.png) | [RAW] | STUN: temporarily unable to act |
-| [status_buff.png](CyberRayne/Raw/ui/status_buff.png) | [RAW] | ATTACK_UP: increased attack damage |
-| [status_debuff.png](CyberRayne/Raw/ui/status_debuff.png) | [RAW] | DEFENSE_DOWN: reduced defense |
-| [status_defense_up.png](CyberRayne/Raw/ui/status_defense_up.png) | [RAW] | DEFENSE_UP: increased defense |
-| [status_attack_down.png](CyberRayne/Raw/ui/status_attack_down.png) | [RAW] | ATTACK_DOWN: reduced attack damage |
-| [status_slow.png](CyberRayne/Raw/ui/status_slow.png) | [RAW] | SLOW: reduced ATB fill speed |
+| [status_poison.png](CyberRayne/Raw/ui/status_poison.png) | [IN GAME] | POISON: damage over time |
+| [status_regen.png](CyberRayne/Raw/ui/status_regen.png) | [IN GAME] | REGEN: healing over time |
+| [status_stun.png](CyberRayne/Raw/ui/status_stun.png) | [IN GAME] | STUN: temporarily unable to act |
+| [status_buff.png](CyberRayne/Raw/ui/status_buff.png) | [IN GAME] | ATTACK_UP: increased attack damage |
+| [status_debuff.png](CyberRayne/Raw/ui/status_debuff.png) | [IN GAME] | DEFENSE_DOWN: reduced defense |
+| [status_defense_up.png](CyberRayne/Raw/ui/status_defense_up.png) | [IN GAME] | DEFENSE_UP: increased defense |
+| [status_attack_down.png](CyberRayne/Raw/ui/status_attack_down.png) | [IN GAME] | ATTACK_DOWN: reduced attack damage |
+| [status_slow.png](CyberRayne/Raw/ui/status_slow.png) | [IN GAME] | SLOW: reduced ATB fill speed |
 | minimap.png | [DEFERRED] | Minimap frame |
 | ~~minimap_player.png~~ | [CUT] | Colored quad, push-constant color |
 | ~~minimap_npc.png~~ | [CUT] | Colored quad |
@@ -300,33 +306,33 @@ and runtime integration are separate steps. Catalog icons use stable item IDs fr
 
 | Asset | Status | Notes |
 | --- | --- | --- |
-| [stim_pack.png](CyberRayne/Raw/items/stim_pack.png) | [RAW] | Stim Pack: restores 40 HP; medical injector, not a temporary buff |
-| [trauma_kit.png](CyberRayne/Raw/items/trauma_kit.png) | [RAW] | Trauma Kit: restores 120 HP; large field medical kit |
-| [defib_patch.png](CyberRayne/Raw/items/defib_patch.png) | [RAW] | Defib Patch: revives at quarter health; paired electrode patch pack |
-| [data_chip.png](CyberRayne/Raw/items/data_chip.png) | [RAW] | Story data chip from the three-quest chain |
-| [credstick.png](CyberRayne/Raw/items/credstick.png) | [RAW] | Currency icon; gold/credits are not inventory stacks |
+| [stim_pack.png](CyberRayne/Raw/items/stim_pack.png) | [IN GAME] | Stim Pack: restores 40 HP; medical injector, not a temporary buff |
+| [trauma_kit.png](CyberRayne/Raw/items/trauma_kit.png) | [IN GAME] | Trauma Kit: restores 120 HP; large field medical kit |
+| [defib_patch.png](CyberRayne/Raw/items/defib_patch.png) | [IN GAME] | Defib Patch: revives at quarter health; paired electrode patch pack |
+| [data_chip.png](CyberRayne/Raw/items/data_chip.png) | [READY] | Story data chip from the three-quest chain |
+| [credstick.png](CyberRayne/Raw/items/credstick.png) | [READY] | Currency icon; gold/credits are not inventory stacks |
 
 ### Current party abilities
 
-All 12 raw icons are generated; filenames match the IDs in `AbilityRegistry.cpp`.
-No icon loader is wired yet. These names replace the old generic spell list for the
-current classes. Sources, exact prompts, and validation details are indexed in the
+All 12 icons are conformed and wired through `SpriteLibrary::icon`; filenames match
+the IDs in `AbilityRegistry.cpp`. These names replace the old generic spell list for
+the current classes. Sources, exact prompts, and validation details are indexed in the
 [ability manifest](CyberRayne/Raw/spells/README.md).
 
 | Asset | Status | Notes |
 | --- | --- | --- |
-| [solo_suppressing_fire.png](CyberRayne/Raw/spells/solo_suppressing_fire.png) | [RAW] | Suppressing Fire: damage to all enemies |
-| [solo_guard_protocol.png](CyberRayne/Raw/spells/solo_guard_protocol.png) | [RAW] | Guard Protocol: ally defense buff |
-| [solo_adrenal_surge.png](CyberRayne/Raw/spells/solo_adrenal_surge.png) | [RAW] | Adrenal Surge: self attack buff |
-| [solo_executioner.png](CyberRayne/Raw/spells/solo_executioner.png) | [RAW] | Executioner: heavy single-target strike |
-| [net_ice_breaker.png](CyberRayne/Raw/spells/net_ice_breaker.png) | [RAW] | Ice Breaker: tech damage to one target |
-| [net_patch.png](CyberRayne/Raw/spells/net_patch.png) | [RAW] | Patch: heal an ally |
-| [net_system_shock.png](CyberRayne/Raw/spells/net_system_shock.png) | [RAW] | System Shock: area tech damage and stun |
-| [net_corrupt.png](CyberRayne/Raw/spells/net_corrupt.png) | [RAW] | Corrupt: target defense debuff |
-| [inf_backstab.png](CyberRayne/Raw/spells/inf_backstab.png) | [RAW] | Backstab: single-target strike |
-| [inf_neurotoxin.png](CyberRayne/Raw/spells/inf_neurotoxin.png) | [RAW] | Neurotoxin: poison |
-| [inf_smoke_screen.png](CyberRayne/Raw/spells/inf_smoke_screen.png) | [RAW] | Smoke Screen: slows enemies |
-| [inf_killswitch.png](CyberRayne/Raw/spells/inf_killswitch.png) | [RAW] | Killswitch: heavy single-target strike |
+| [solo_suppressing_fire.png](CyberRayne/Raw/spells/solo_suppressing_fire.png) | [IN GAME] | Suppressing Fire: damage to all enemies |
+| [solo_guard_protocol.png](CyberRayne/Raw/spells/solo_guard_protocol.png) | [IN GAME] | Guard Protocol: ally defense buff |
+| [solo_adrenal_surge.png](CyberRayne/Raw/spells/solo_adrenal_surge.png) | [IN GAME] | Adrenal Surge: self attack buff |
+| [solo_executioner.png](CyberRayne/Raw/spells/solo_executioner.png) | [IN GAME] | Executioner: heavy single-target strike |
+| [net_ice_breaker.png](CyberRayne/Raw/spells/net_ice_breaker.png) | [IN GAME] | Ice Breaker: tech damage to one target |
+| [net_patch.png](CyberRayne/Raw/spells/net_patch.png) | [IN GAME] | Patch: heal an ally |
+| [net_system_shock.png](CyberRayne/Raw/spells/net_system_shock.png) | [IN GAME] | System Shock: area tech damage and stun |
+| [net_corrupt.png](CyberRayne/Raw/spells/net_corrupt.png) | [IN GAME] | Corrupt: target defense debuff |
+| [inf_backstab.png](CyberRayne/Raw/spells/inf_backstab.png) | [IN GAME] | Backstab: single-target strike |
+| [inf_neurotoxin.png](CyberRayne/Raw/spells/inf_neurotoxin.png) | [IN GAME] | Neurotoxin: poison |
+| [inf_smoke_screen.png](CyberRayne/Raw/spells/inf_smoke_screen.png) | [IN GAME] | Smoke Screen: slows enemies |
+| [inf_killswitch.png](CyberRayne/Raw/spells/inf_killswitch.png) | [IN GAME] | Killswitch: heavy single-target strike |
 
 ### Deferred item concepts (not current catalog IDs)
 | Asset | Status | Notes |
@@ -369,10 +375,10 @@ shared bag rather than being restricted by the appearance of a class sprite.
 
 | Asset | Status | Notes |
 | --- | --- | --- |
-| [shock_baton.png](CyberRayne/Raw/equipment/shock_baton.png) | [RAW] | Shock Baton: ATK +4 |
-| [mono_katana.png](CyberRayne/Raw/equipment/mono_katana.png) | [RAW] | Mono-Katana: ATK +8 |
-| [street_jacket.png](CyberRayne/Raw/equipment/street_jacket.png) | [RAW] | Street Jacket: DEF +3 |
-| [kevlar_weave.png](CyberRayne/Raw/equipment/kevlar_weave.png) | [RAW] | Kevlar Weave: DEF +6 |
+| [shock_baton.png](CyberRayne/Raw/equipment/shock_baton.png) | [IN GAME] | Shock Baton: ATK +4 |
+| [mono_katana.png](CyberRayne/Raw/equipment/mono_katana.png) | [IN GAME] | Mono-Katana: ATK +8 |
+| [street_jacket.png](CyberRayne/Raw/equipment/street_jacket.png) | [IN GAME] | Street Jacket: DEF +3 |
+| [kevlar_weave.png](CyberRayne/Raw/equipment/kevlar_weave.png) | [IN GAME] | Kevlar Weave: DEF +6 |
 
 ### Deferred equipment concepts
 
@@ -524,22 +530,23 @@ there is time for more, the first to split out are each class's strongest abilit
 
 ## 11. Particle Effects / VFX (`assets/vfx/`)
 
-All sheets are raw 4×2 source layouts. See the [selected sources and preparation notes](CyberRayne/Raw/vfx/README.md).
+All 12 effects are conformed to 256x128 sheets and wired into the game. Links below point
+to the original sources; see the [raw manifest and generation notes](CyberRayne/Raw/vfx/README.md).
 
 | Asset | Status | Notes |
 |-------|--------|-------|
-| vfx_fireball.png | [RAW] | Fireball projectile sprite; [8-frame source](CyberRayne/Raw/vfx/vfx_fireball.png) |
-| vfx_ice_shard.png | [RAW] | Ice projectile sprite; [8-frame source](CyberRayne/Raw/vfx/vfx_ice_shard-v2.png) |
-| vfx_lightning.png | [RAW] | Lightning bolt sprite; [8-frame source](CyberRayne/Raw/vfx/vfx_lightning.png) |
-| vfx_heal_glow.png | [RAW] | Healing glow particle; [8-frame source](CyberRayne/Raw/vfx/vfx_heal_glow.png) |
-| vfx_hit_spark.png | [RAW] | Impact spark particle; [8-frame source](CyberRayne/Raw/vfx/vfx_hit_spark.png) |
-| vfx_explosion.png | [RAW] | Explosion particle; [8-frame source](CyberRayne/Raw/vfx/vfx_explosion.png) |
-| vfx_levelup.png | [RAW] | Level up burst effect; [8-frame source](CyberRayne/Raw/vfx/vfx_levelup-v2.png) |
-| vfx_hack_stream.png | [RAW] | Data stream visual for hacking; [8-frame source](CyberRayne/Raw/vfx/vfx_hack_stream.png) |
-| vfx_poison.png | [RAW] | Poison cloud particle; [8-frame source](CyberRayne/Raw/vfx/vfx_poison.png) |
-| vfx_dust.png | [RAW] | Ambient dust particles; [8-frame source](CyberRayne/Raw/vfx/vfx_dust.png) |
-| vfx_rain.png | [RAW] | Rain particle spritesheet; [8-frame source](CyberRayne/Raw/vfx/vfx_rain.png) |
-| vfx_neon_glow.png | [RAW] | Neon glow overlay; [8-frame source](CyberRayne/Raw/vfx/vfx_neon_glow-v2.png) |
+| vfx_fireball.png | [IN GAME] | Fireball projectile sprite; [8-frame source](CyberRayne/Raw/vfx/vfx_fireball.png) |
+| vfx_ice_shard.png | [IN GAME] | Ice projectile sprite; [8-frame source](CyberRayne/Raw/vfx/vfx_ice_shard-v2.png) |
+| vfx_lightning.png | [IN GAME] | Lightning bolt sprite; [8-frame source](CyberRayne/Raw/vfx/vfx_lightning.png) |
+| vfx_heal_glow.png | [IN GAME] | Healing glow particle; [8-frame source](CyberRayne/Raw/vfx/vfx_heal_glow.png) |
+| vfx_hit_spark.png | [IN GAME] | Impact spark particle; [8-frame source](CyberRayne/Raw/vfx/vfx_hit_spark.png) |
+| vfx_explosion.png | [IN GAME] | Explosion particle; [8-frame source](CyberRayne/Raw/vfx/vfx_explosion.png) |
+| vfx_levelup.png | [IN GAME] | Level up burst effect; [8-frame source](CyberRayne/Raw/vfx/vfx_levelup-v2.png) |
+| vfx_hack_stream.png | [IN GAME] | Data stream visual for hacking; [8-frame source](CyberRayne/Raw/vfx/vfx_hack_stream.png) |
+| vfx_poison.png | [IN GAME] | Poison cloud particle; [8-frame source](CyberRayne/Raw/vfx/vfx_poison.png) |
+| vfx_dust.png | [IN GAME] | Ambient dust particles; [8-frame source](CyberRayne/Raw/vfx/vfx_dust.png) |
+| vfx_rain.png | [IN GAME] | Rain particle spritesheet; [8-frame source](CyberRayne/Raw/vfx/vfx_rain.png) |
+| vfx_neon_glow.png | [IN GAME] | Neon glow overlay; [8-frame source](CyberRayne/Raw/vfx/vfx_neon_glow-v2.png) |
 
 ---
 
@@ -547,11 +554,11 @@ All sheets are raw 4×2 source layouts. See the [selected sources and preparatio
 
 | Asset | Status | Notes |
 |-------|--------|-------|
-| intro_1.png | [DEFERRED] | Opening cutscene frame 1 |
-| intro_2.png | [DEFERRED] | Opening cutscene frame 2 |
-| intro_3.png | [DEFERRED] | Opening cutscene frame 3 |
-| ending_good.png | [DEFERRED] | Good ending |
-| ending_bad.png | [DEFERRED] | Bad ending |
+| [intro_1.png](CyberRayne/Raw/cutscenes/intro_1.png) | [IN GAME] | Neo-Kyoto after dark |
+| [intro_2.png](CyberRayne/Raw/cutscenes/intro_2.png) | [IN GAME] | Kaga asks Rayne to recover the stolen chip; Solo outfit |
+| [intro_3.png](CyberRayne/Raw/cutscenes/intro_3.png) | [IN GAME] | Rayne at the entrance to Neon Alley; Solo outfit |
+| [ending_good.png](CyberRayne/Raw/cutscenes/ending_good.png) | [IN GAME] | Info Broker broadcasts the evidence before sunrise; Solo outfit |
+| [ending_bad.png](CyberRayne/Raw/cutscenes/ending_bad.png) | [RAW] | Optional suppressed-broadcast concept; no implemented story branch; Solo outfit |
 | transition_fade.png | [COVERED] | Can be drawn as a full-screen colored quad |
 
 ---
@@ -564,14 +571,16 @@ All sheets are raw 4×2 source layouts. See the [selected sources and preparatio
 | Enemies | 5 base sprites + 5 battle sheets integrated |
 | NPCs | 7 base sprites + 7 idle/talk sheets integrated |
 | Font | 1 existing runtime atlas |
-| Runtime image validation | 43 files pass; zero failures |
+| Runtime image validation | 84 files pass; zero failures |
 | Tiles, menus, overlays, fallback skyline | Existing procedural/code-drawn visuals |
-| Item/story and equipment icons | 9 raw originals generated; conformance and wiring remain |
-| Party ability icons | 12 raw originals generated using current ability IDs; conformance and wiring remain |
+| Item/story and equipment icons | 9 conformed; 7 integrated, data chip and credstick ready but unused |
+| Party ability icons | 12 conformed and integrated using current ability IDs |
 | District battle backgrounds | 3 paintings conformed to 960x540 and integrated |
-| Status icons | 8 raw originals cover every current StatusEffect type; conformance and wiring remain |
-| VFX | 12 raw eight-frame sheets (96 frames); conformance and wiring remain |
-| Optional art | Cutscenes, extra cast and vehicles retained above |
+| Status icons | 8 conformed and integrated; all current StatusEffect types covered |
+| VFX | 12 eight-frame sheets conformed and integrated; motion review remains |
+| Opening cutscenes | 3 panels in game, shown when a new game starts |
+| Ending paintings | 2 raw originals generated; good ending follows the slice, bad ending is optional |
+| Optional art | Extra cast, vehicles and other deferred concepts retained above |
 | Audio | 9 music + 32 SFX files exist; 40 wired, ui_equip hookup pending; playback user-confirmed |
 
 The old "195 assets remaining" total mixed slice requirements with speculative
@@ -580,3 +589,7 @@ Generate a coherent batch at a time, preserve sources and prompts under `Raw/`,
 and update each row to RAW when saved, then IN GAME after conformance and wiring.
 No additional art here changes the completed Phase 11 status or advances the story
 beyond the approved three-quest slice.
+
+**Art checkpoint (2026-11-16):** All five cutscene sources are generated. Hold further
+wishlist generation until the user has progressed the game, then reassess needs against
+the implemented content and integration status.

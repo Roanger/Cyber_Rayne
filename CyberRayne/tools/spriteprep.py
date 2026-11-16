@@ -197,9 +197,14 @@ def process(path: Path, spec, args) -> Path:
     if not args.no_palette and not args.fill:
         im = snap_to_palette(im)
 
-    outdir = Path(args.outdir) if args.outdir else path.parent
-    outdir.mkdir(parents=True, exist_ok=True)
+    # Default to the game's own folder for the category, never beside the
+    # input: that once replaced original art with its conformed copy.
+    default_outdir = Path(__file__).resolve().parent.parent / "assets" / spec.directory
+    outdir = Path(args.outdir) if args.outdir else default_outdir
     out = outdir / f"{path.stem}.png"
+    if out.resolve() == path.resolve():
+        raise ValueError("output would overwrite the input; pass a different --outdir")
+    outdir.mkdir(parents=True, exist_ok=True)
     im.save(out, "PNG", optimize=True)
     return out
 
@@ -210,7 +215,7 @@ def main() -> int:
     ap.add_argument("inputs", nargs="+", type=Path)
     ap.add_argument("--category", required=True, choices=sorted(SPECS_BY_DIR),
                     help="Which spec to conform to.")
-    ap.add_argument("--outdir", help="Defaults to alongside each input.")
+    ap.add_argument("--outdir", help="Defaults to assets/<category>. Never the input's own folder.")
     ap.add_argument("--size", type=lambda s: tuple(int(v) for v in s.split("x")),
                     metavar="WxH", help="Override the category's default size.")
     ap.add_argument("--rembg", action="store_true",

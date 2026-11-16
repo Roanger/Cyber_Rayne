@@ -26,6 +26,7 @@ they read clearly against the ground without dwarfing it.
 | VFX | `assets/vfx/` | 32x32 – 64x64 | required | authored |
 | UI | `assets/ui/` | up to 640x360 | required | authored |
 | Backgrounds | `assets/backgrounds/` | 320x180 – 960x540 | not required | authored / generated |
+| Cutscenes | `assets/cutscenes/` | 960x540 exactly | not required | authored / generated |
 | Fonts | `assets/fonts/` | atlas | not required | authored |
 
 640x360 is the pixel-art canvas that integer-scales exactly 3x to 1920x1080. Battle

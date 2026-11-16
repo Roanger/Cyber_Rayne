@@ -151,7 +151,9 @@ bool GameState::initialize() {
         // CYBERRAYNE_START=battle starts a new game inside a mixed fight, for
         // working on the battle screen.
         m_pendingDevBattle = (std::string(start) == "battle");
-        m_pendingDevStart = m_pendingDevStart || m_pendingDevBattle;
+        // CYBERRAYNE_START=intro starts a new game with the opening pictures.
+        m_pendingDevIntro = (std::string(start) == "intro");
+        m_pendingDevStart = m_pendingDevStart || m_pendingDevBattle || m_pendingDevIntro;
         // CYBERRAYNE_START=settings opens on the settings screen.
         if (std::string(start) == "settings") {
             openSettings();
@@ -188,6 +190,7 @@ void GameState::updateMusic() {
     switch (m_currentState) {
         case State::MENU:
         case State::CHARACTER_SELECTION:
+        case State::INTRO:
             m_audioManager->playMusic("title");
             break;
         case State::WORLD_EXPLORATION:
@@ -247,6 +250,7 @@ void GameState::playUiSound(InputAction action) {
             break;
         case State::BATTLE_RESULT:
         case State::GAME_OVER:
+        case State::INTRO:
             menuOpen = true;
             moves = false;
             break;
@@ -284,6 +288,10 @@ void GameState::update(float deltaTime) {
             m_charSelectionSystem->confirmSelection();
         }
         startNewGame();
+        if (m_pendingDevIntro) {
+            m_pendingDevIntro = false;
+            beginIntro();
+        }
     }
 
     if (m_pendingDevBattle) {
@@ -341,7 +349,14 @@ void GameState::update(float deltaTime) {
                 
                 if (m_charSelectionSystem->isCharacterSelected()) {
                     startNewGame();
+                    beginIntro();
                 }
+            }
+            break;
+        case State::INTRO:
+            m_intro.update(deltaTime);
+            if (m_intro.isFinished()) {
+                m_currentState = State::WORLD_EXPLORATION;
             }
             break;
         case State::WORLD_EXPLORATION:
@@ -350,6 +365,9 @@ void GameState::update(float deltaTime) {
             }
             // The world holds still while someone is talking or the ending
             // card is up.
+            if (m_showEnding) {
+                m_endingScene.update(deltaTime);
+            }
             if ((m_dialogue && m_dialogue->isActive()) || m_showEnding) {
                 break;
             }
@@ -518,6 +536,9 @@ void GameState::render(VulkanRenderer* renderer) {
                 renderer->renderSprite(0.0f, 0.0f, 2.0f, 2.0f);
             }
             break;
+        case State::INTRO:
+            m_intro.render(renderer, m_storyHud ? m_storyHud->text() : nullptr, m_sprites.get());
+            break;
         case State::WORLD_EXPLORATION:
         case State::PAUSED:
             // The pause menu is drawn over the frozen world.
@@ -578,7 +599,9 @@ void GameState::renderWorldScene(VulkanRenderer* renderer) {
 
     // Story overlay goes on last so it sits above the world and the player.
     if (m_currentState == State::WORLD_EXPLORATION && m_storyHud && m_world && m_world->getCurrentMap()) {
-        if (m_showEnding) {
+        if (m_showEnding && !m_endingScene.isFinished()) {
+            m_endingScene.render(renderer, m_storyHud->text(), m_sprites.get());
+        } else if (m_showEnding) {
             m_storyHud->renderEnding(renderer);
         } else {
             const bool talking = m_dialogue && m_dialogue->isActive();
@@ -612,6 +635,8 @@ void GameState::handleInput(InputAction action) {
         m_menuSystem->handleInput(action);
     } else if (m_currentState == State::CHARACTER_SELECTION && m_charSelectionSystem) {
         m_charSelectionSystem->handleInput(action);
+    } else if (m_currentState == State::INTRO) {
+        m_intro.handleInput(action);
     } else if (m_currentState == State::WORLD_EXPLORATION && m_party && m_world) {
         handleExplorationInput(action);
     } else if (m_currentState == State::PAUSED && m_pauseMenu) {
@@ -744,7 +769,9 @@ void GameState::finishBattle() {
 
 void GameState::handleExplorationInput(InputAction action) {
     if (m_showEnding) {
-        if (action == InputAction::CONFIRM) {
+        if (!m_endingScene.isFinished()) {
+            m_endingScene.handleInput(action);
+        } else if (action == InputAction::CONFIRM) {
             m_showEnding = false;
         }
         return;
@@ -823,6 +850,7 @@ void GameState::handleDialogueInput(InputAction action) {
         m_reportedNodeId = -1;
         if (m_storyDirector && m_storyDirector->consumeEndingTrigger()) {
             m_showEnding = true;
+            m_endingScene.start(Cutscene::endingPanels());
         }
         syncStory();
         return;
@@ -941,6 +969,13 @@ void GameState::startNewGame() {
     beginStory();
 
     m_currentState = State::WORLD_EXPLORATION;
+}
+
+void GameState::beginIntro() {
+    // The world is already built behind it; the pictures only delay the
+    // first step. Loading a save never comes through here.
+    m_intro.start(Cutscene::introPanels(), "begin");
+    m_currentState = State::INTRO;
 }
 
 void GameState::loadGame() {

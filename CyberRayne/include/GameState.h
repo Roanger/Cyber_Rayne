@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ui/Cutscene.h"
 #include "AudioSettings.h"
 #include <memory>
 #include <string>
@@ -36,6 +37,7 @@ public:
     enum class State {
         MENU,
         CHARACTER_SELECTION,
+        INTRO,   // opening pictures, shown once when a new game starts
         WORLD_EXPLORATION,
         BATTLE,
         BATTLE_RESULT,
@@ -78,6 +80,7 @@ public:
 
 private:
     void startNewGame();
+    void beginIntro();
     void loadGame();
     // Write the current game to the per-user save file. Returns true on success.
     bool saveGame();
@@ -137,6 +140,11 @@ private:
     bool m_pendingDevLoad = false;
     // Set by CYBERRAYNE_START=battle; consumed on the first update().
     bool m_pendingDevBattle = false;
+    // CYBERRAYNE_START=intro: new game, opening pictures included.
+    bool m_pendingDevIntro = false;
+    Cutscene m_intro;
+    // The ending picture; plays before the closing card while m_showEnding.
+    Cutscene m_endingScene;
     // Seconds since start-up; drives idle animation on the map.
     float m_animTime = 0.0f;
     int m_heldDx = 0;

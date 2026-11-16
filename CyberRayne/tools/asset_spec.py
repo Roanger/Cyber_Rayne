@@ -117,6 +117,15 @@ SPECS: list[CategorySpec] = [
               "46% down the image.",
     ),
     CategorySpec(
+        directory="cutscenes",
+        size=(960, 540),
+        requires_alpha=False,
+        requires_transparent_pixels=False,
+        notes="Full-screen story pictures, exactly 960x540 and opaque. Keep the "
+              "lower 15% quiet: the caption box is drawn over it. Conform with "
+              "spriteprep.py --category cutscenes --size 960x540 --fill.",
+    ),
+    CategorySpec(
         directory="fonts",
         size=(8, 8),
         max_size=(1024, 1024),

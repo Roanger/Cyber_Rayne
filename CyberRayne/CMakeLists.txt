@@ -79,6 +79,7 @@ add_executable(CyberRayne
     src/systems/BattleSounds.cpp
     src/ui/StoryHud.cpp
     src/ui/PauseMenu.cpp
+    src/ui/Cutscene.cpp
     src/ui/SettingsMenu.cpp
     src/ui/Theme.cpp
     src/ui/BattleFx.cpp
@@ -271,6 +272,7 @@ add_executable(BattlePresentationTest
 add_executable(MenuTest
     src/tests/MenuTest.cpp
     src/ui/PauseMenu.cpp
+    src/ui/Cutscene.cpp
     src/ui/SettingsMenu.cpp
     src/systems/InputConfig.cpp
     ${GAMEPLAY_TEST_SUPPORT_SOURCES}

@@ -2,6 +2,7 @@
 #include "../../include/InputConfig.h"
 #include "../../include/Party.h"
 #include "../../include/ui/PauseMenu.h"
+#include "../../include/ui/Cutscene.h"
 #include "../../include/AudioSettings.h"
 #include "../../include/ui/SettingsMenu.h"
 
@@ -33,6 +34,50 @@ void goTo(PauseMenu& menu, int entry) {
 }  // namespace
 
 int main() {
+    // --- Opening cutscene ------------------------------------------------------
+    {
+        Cutscene scene;
+        expect(scene.isFinished(), "a cutscene that was never started is finished");
+
+        const auto panels = Cutscene::introPanels();
+        expect(panels.size() == 3, "the opening has three panels");
+        for (const auto& panel : panels) {
+            expect(!panel.image.empty() && !panel.caption.empty(), "every panel has a picture and a caption");
+        }
+
+        expect(Cutscene::endingPanels().size() == 1 && !Cutscene::endingPanels()[0].caption.empty(),
+               "the ending has one captioned picture");
+
+        scene.start(panels);
+        expect(!scene.isFinished() && scene.getPanelIndex() == 0, "it starts on the first panel");
+        expect(scene.getVisibleCaption().empty() && !scene.isCaptionComplete(), "the caption starts empty");
+        scene.update(10.0f / Cutscene::CHARS_PER_SECOND + 0.001f);
+        expect(scene.getVisibleCaption() == panels[0].caption.substr(0, 10), "the caption types out over time");
+
+        scene.handleInput(InputAction::CONFIRM);
+        expect(scene.getPanelIndex() == 0 && scene.getVisibleCaption() == panels[0].caption,
+               "the first Confirm finishes the caption instead of skipping it");
+        scene.handleInput(InputAction::MOVE_DOWN);
+        expect(scene.getPanelIndex() == 0, "directions do nothing");
+        scene.handleInput(InputAction::CONFIRM);
+        expect(scene.getPanelIndex() == 1 && scene.getVisibleCaption().empty(),
+               "the second Confirm moves on, and the next caption starts over");
+
+        scene.update(60.0f);
+        expect(scene.isCaptionComplete(), "a caption left alone finishes typing");
+        scene.handleInput(InputAction::CONFIRM);
+        scene.update(60.0f);
+        scene.handleInput(InputAction::CONFIRM);
+        expect(scene.isFinished(), "Confirm on the last panel ends the cutscene");
+
+        scene.start(panels);
+        scene.handleInput(InputAction::CANCEL);
+        expect(scene.isFinished(), "Cancel skips the whole cutscene");
+        scene.start(panels);
+        scene.handleInput(InputAction::OPEN_MENU);
+        expect(scene.isFinished(), "the menu button skips it too");
+    }
+
     // --- Root navigation -----------------------------------------------------
     {
         PauseMenu menu;
