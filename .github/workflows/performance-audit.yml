@@ -2,12 +2,11 @@
 # Runs benchmark on push/PR and reports performance metrics
 name: Performance Audit
 
+# Switched off for pushes and pull requests (2026-11-16): it needs the separate
+# performance-auditor repository and a PAT_TOKEN secret that has expired. It
+# can still be started by hand from the Actions tab once the token is renewed.
 on:
-  push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
-  workflow_dispatch:  # Allow manual trigger
+  workflow_dispatch:
 
 jobs:
   performance-audit:
