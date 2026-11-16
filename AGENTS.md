@@ -584,9 +584,30 @@ mismanaging resources leaves a member with only Attack and items, and they like 
 Do not retune difficulty for the slice unless the user asks. (My reading: the 100% win
 rates in `BalanceTest` are not a problem to them; the cost is in MP and items.)
 
-- Tuning pass for a 20-30 minute slice.
-- Automated scripted-playthrough test of the full quest chain.
-- Full manual playthrough.
+**Scripted playthrough (2026-11-16): `PlaythroughTest`.** A scripted player finishes the
+whole slice on foot, once per class of Rayne: it reads the quest tracker, finds a route
+tile by tile, talks to the named NPC, fights every battle that starts on the way (story
+fights and ambushes), uses items and the vendor, equips rewards, saves after each quest,
+quits and resumes once, tries the locked plaza gate, and reaches the ending. A wipe
+reloads the last save, as the game-over card does; more than two wipes in a run fails.
+- `GameState` cannot run without the renderer, so the test's `Session` repeats its glue
+  (exploring update, `finishBattle`, `syncStory`, save and load). **If that glue changes
+  in `GameState`, change it in `PlaythroughTest.cpp` too.**
+- Battles are random, so the test was run 600 times: 600 passes. Over 300 runs per class:
+  everyone ends at level 4; 6-7 battles on average (up to 12); 4-6 items used; Netrunner
+  Rayne wiped in 6 of 300 runs (2%), Solo and Infiltrator never. The scripted player
+  never uses heal abilities or Defend, so a person does better.
+- The shortest route is only about 170 steps (under half a minute of walking), so the
+  slice's length comes from fights, reading and wandering, not distance. The user's own
+  full run on 2026-11-16 had 12 fights.
+
+Done:
+- Automated scripted-playthrough test of the full quest chain (above).
+- Full manual playthrough (user, 2026-11-16, controller, start to ending, no errors).
+
+Remaining:
+- Tuning pass for a 20-30 minute slice: the user's verdict above is to leave difficulty
+  alone. Length has not been timed.
 
 ### Backlog (not yet assigned to a phase)
 

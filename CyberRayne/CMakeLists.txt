@@ -235,6 +235,21 @@ add_executable(StoryTest
     ${GAMEPLAY_TEST_SUPPORT_SOURCES}
 )
 
+add_executable(PlaythroughTest
+    src/tests/PlaythroughTest.cpp
+    src/core/World.cpp
+    src/systems/EncounterTable.cpp
+    src/systems/ContentFactory.cpp
+    src/systems/StoryDirector.cpp
+    src/systems/DialogueSystem.cpp
+    src/systems/BattleSystem.cpp
+    src/systems/SaveSystem.cpp
+    src/entities/EnemyTypes.cpp
+    src/entities/Quest.cpp
+    src/entities/QuestLog.cpp
+    ${GAMEPLAY_TEST_SUPPORT_SOURCES}
+)
+
 add_executable(InventoryTest
     src/tests/InventoryTest.cpp
     src/systems/BattleSystem.cpp
@@ -280,7 +295,7 @@ add_executable(MenuTest
     src/systems/AudioSettings.cpp
 )
 
-foreach(test_target CharacterSelectionTest BattleSystemTest EnemyTypesTest BitmapFontTest DialogueSystemTest QuestTest ProgressionTest SaveLoadTest ContentTest Phase5Test EncounterTest StatusEffectTest AbilityTest StoryTest MenuTest InventoryTest BalanceTest BattlePresentationTest)
+foreach(test_target CharacterSelectionTest BattleSystemTest EnemyTypesTest BitmapFontTest DialogueSystemTest QuestTest ProgressionTest SaveLoadTest ContentTest Phase5Test EncounterTest StatusEffectTest AbilityTest StoryTest MenuTest InventoryTest BalanceTest BattlePresentationTest PlaythroughTest)
     target_include_directories(${test_target} PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/third_party
